@@ -11,15 +11,16 @@ import json
 import sys
 from opentree import OpenTree
 
-OT = OpenTree()
-output = OT.find_trees(search_property="ot:branchLengthMode", value="ot:time")
-output.__dict__
-output.response_dict.keys()
-output.response_dict["matched_studies"]
 
-for study in output.response_dict["matched_studies"]:
-    for studies in study["matched_trees"]:
-        print(studies.keys())
+def find_chronograms():
+    OT = OpenTree()
+    output = OT.find_trees(search_property="ot:branchLengthMode", value="ot:time")
+    output.response_dict["matched_studies"]
+    chronograms = set()
+    for study in output.response_dict["matched_studies"]:
+        for tree in study["matched_trees"]:
+            chronograms.add(tree)
+    return list(chronograms)
 
 
 output.response_dict["matched_studies"][1]
