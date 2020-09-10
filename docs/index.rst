@@ -16,3 +16,4 @@ Welcome to chronosynth's documentation!
    :caption: Documentation topics:
 
    apidocs
+   install
