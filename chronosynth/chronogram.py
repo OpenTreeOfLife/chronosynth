@@ -9,11 +9,12 @@ DC = opentree.object_conversion.DendropyConvert()
 
 def find_chronograms():
     """
-    Get all study ids in Phylesystem where 'ot:branchLengthMode' == 'ot:time'
+    Get study and tree ids for all chronograms (trees with branch lengths proportional
+    to time) in Phylesystem, i.e., where 'ot:branchLengthMode' == 'ot:time'
 
     Returns
     -------
-    A list of Phylesystem study ids containing at least one tree that is a chronogram.
+    A list of Phylesystem chronogram's source ids: study_id@treeid.
     """
     output = OT.find_trees(search_property="ot:branchLengthMode", value="ot:time")
     chronograms = set()
@@ -31,7 +32,7 @@ def get_node_ages(source_id):
 
     Returns
     -------
-    A list of node ages.
+    A list of node ages and its branch length type: A tuple.
     """
     assert '@' in source_id
     study_id = source_id.split('@')[0]
