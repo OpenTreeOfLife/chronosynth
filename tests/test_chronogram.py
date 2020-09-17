@@ -1,5 +1,5 @@
 import chronosynth
-from chronosynth.chronogram import all_chrono, node_ages, as_dendropy
+from chronosynth.chronogram import all_chrono, node_ages, as_dendropy, map_conflict_ages
 
 
 def test_all():
@@ -17,3 +17,6 @@ def test_node_ages():
     assert age_data['metadata']['time_unit'] == 'Myr'
     assert len(age_data['ages']) == 290
     assert age_data['ages']['node564'] == 21.381546999999998
+
+def test_conf_map():
+    res = map_conflict_ages('ot_1000@tree1')

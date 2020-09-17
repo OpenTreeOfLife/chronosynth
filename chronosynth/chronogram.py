@@ -64,7 +64,44 @@ def node_ages(source_id):
     for node in dp_tree.internal_nodes():
         assert node.label not in ages.keys()
         ages[node.label] = node.age
-        print(node.label)
-        print(node.age)
     ret = {'metadata':metadata, 'ages':ages}
     return ret
+
+
+def map_conflict_ages(source_id):
+    """ 
+    Takes a source id in format study_id@tree_id
+
+    returns a dictionary
+    {'metadata':{'study_id': study_id, 'tree_id': tree_id, 'time_unit': time_unit, 'synth_version':version},
+    'supported_nodes':{synth_node_id : {'age':age, 'node_label':node_label}}
+    }
+    """
+    ages_data = node_ages(source_id)
+    metadata = ages_data['metadata']
+    version = OT.about() ## TODO this returns webservice call records and should be updated in python opentree
+    synth_version = version['synth_tree_about'].response_dict
+    tax_version = version['taxonomy_about'].response_dict
+    metadata['synth_version'] = (synth_version, tax_version)
+    output_conflict = OT.conflict_info(study_id = metadata['study_id'],
+                                       tree_id= metadata['tree_id'])
+    conf = output_conflict.response_dict
+    supported_nodes = {}
+    for node_label in ages_data['ages']:
+        age = ages_data['ages'][node_label]
+        if node_label not in conf:
+            #This should only happen for the root
+            #ToDo mapp root to synth using mrca??
+            ## Skips not in ingroup...
+            #print(node_label)
+            continue
+        node_conf = conf[node_label]
+        status = node_conf['status']
+        witness = node_conf['witness']
+        if status == 'supported_by':
+            supported_nodes[witness] = {'age':age, 'node_label':node_label}
+    ret = {'metadata':metadata, 'supported_nodes':supported_nodes}
+    return ret
+
+
+

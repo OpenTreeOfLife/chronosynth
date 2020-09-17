@@ -3,5 +3,5 @@ from chronosynth.chronogram import find_chronograms
 
 
 
-trees = all()
+trees = all_chrono()
 print(trees)
