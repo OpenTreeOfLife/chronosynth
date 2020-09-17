@@ -7,7 +7,7 @@ from opentree import OT
 DC = opentree.object_conversion.DendropyConvert()
 
 
-def find_chronograms():
+def all():
     """
     Get study and tree ids for all chronograms (trees with branch lengths proportional
     to time) in Phylesystem, i.e., where 'ot:branchLengthMode' == 'ot:time'
@@ -25,14 +25,13 @@ def find_chronograms():
             chronograms.add('{}@{}'.format(study_id, tree_id))
     return list(chronograms)
 
-
-def get_node_ages(source_id):
+def as_dendropy(source_id):
     """
-    Get node ages for any given tree in the Open Tree of Life
+    Get a dendropy object of a chronogram in Phylesystem.
 
-    Returns
+    Example
     -------
-    A list of node ages and its branch length type: A tuple.
+    source_id = 'ot_1000@tree1'
     """
     assert '@' in source_id
     study_id = source_id.split('@')[0]
@@ -40,6 +39,21 @@ def get_node_ages(source_id):
     study = OT.get_study(study_id)
     study_nexson = study.response_dict['data']
     tree_obj = DC.tree_from_nexson(study_nexson, tree_id)
-    time_unit = tree_obj.annotations.get_value("branchLengthTimeUnit")
-    assert tree_obj.annotations.get_value("branchLengthMode") == 'ot:time'
+    return tree_obj
+
+def node_ages(dendropy_tree):
+    """
+    Get node ages for a DendroPy tree object.
+
+    Returns
+    -------
+    A list of node ages and its branch length type: A tuple.
+
+    """
+    time_unit = dendropy_tree.annotations.get_value("branchLengthTimeUnit")
+    assert dendropy_tree.annotations.get_value("branchLengthMode") == 'ot:time'
+    node_labels = []
+    for node in dendropy_tree.internal_nodes():
+    print(node.label + ", " + str(node.age))
+    node_labels.append(node.label)
     return (tree_obj.internal_node_ages(), time_unit)
