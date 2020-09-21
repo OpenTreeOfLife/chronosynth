@@ -1,7 +1,7 @@
 import chronosynth
-from chronosynth.chronogram import find_chronograms
+from chronosynth.chronogram import find
 
 
 
-trees = all_chrono()
-print(trees)
+studies = find()
+print(studies)
