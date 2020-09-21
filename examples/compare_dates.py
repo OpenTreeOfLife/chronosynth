@@ -11,10 +11,10 @@ for synth_node in res_ot1056['supported_nodes']:
     if synth_node in res_ot1000['supported_nodes']:
         print((res_ot1056['supported_nodes'][synth_node]['age'], res_ot1000['supported_nodes'][synth_node]['age']))
 
+# TODO: for test_conf_map_all:
 errors = []
 no_conflict = []
 studies = chronogram.find()
-
 for tag in studies:
     try:
         res = map_conflict_ages(tag)
