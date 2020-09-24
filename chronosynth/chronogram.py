@@ -1,13 +1,24 @@
 """Functions for working with chronograms from Phylesystem"""
 #!/usr/bin/env python3
-
+import sys
 import opentree
 from opentree import OT
-
 DC = opentree.object_conversion.DendropyConvert()
 
 
-def find():
+def set_dev():
+    global OT
+    OT = opentree.ot_object.OpenTree(api_endpoint='dev')
+
+
+def set_prod():
+    global OT
+    OT = opentree.ot_object.OpenTree()
+
+def print_endpoint():
+    print(OT._api_endpoint)
+
+def find_trees():
     """
     Get study and tree ids for all chronograms (trees with branch lengths proportional
     to time) in Phylesystem, i.e., where 'ot:branchLengthMode' == 'ot:time'
@@ -36,7 +47,7 @@ def as_dendropy(source_id):
     assert '@' in source_id
     study_id = source_id.split('@')[0]
     tree_id = source_id.split('@')[1]
-    study = OT.get_study(study_id)
+    study = OT.get_study(study_id)## Todo: catch failure of study GET
     study_nexson = study.response_dict['data']
     tree_obj = DC.tree_from_nexson(study_nexson, tree_id)
     return tree_obj
@@ -87,7 +98,8 @@ def map_conflict_ages(source_id):
     output_conflict = OT.conflict_info(study_id=metadata['study_id'], tree_id=metadata['tree_id'])
     conf = output_conflict.response_dict
     if(conf==None):
-        print("No conflict data available for tree", source_id, "\n Check it's status at tree.opentreeoflife.org")
+        url = "https://tree.opentreeoflife.org/curator/study/view/{}/?tab=home&tree={}".format(metadata['study_id'], metadata['tree_id'])
+        sys.stderr.write("No conflict data available for tree {} \n Check its status at {}".format(source_id, url))
         return(None)
     supported_nodes = {}
     for node_label in ages_data['ages']:

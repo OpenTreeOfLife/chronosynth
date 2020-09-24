@@ -1,9 +1,7 @@
 from chronosynth import chronogram
 
-
-
-res_ot1000 = map_conflict_ages('ot_1000@tree1')
-res_ot1056 = map_conflict_ages('ot_1056@Tr66755')
+res_ot1000 = chronogram.map_conflict_ages('ot_1000@tree1')
+res_ot1056 = chronogram.map_conflict_ages('ot_1056@Tr66755')
 
 
 
@@ -11,13 +9,18 @@ for synth_node in res_ot1056['supported_nodes']:
     if synth_node in res_ot1000['supported_nodes']:
         print((res_ot1056['supported_nodes'][synth_node]['age'], res_ot1000['supported_nodes'][synth_node]['age']))
 
+
+
+chronogram.set_dev()
+
+
 # TODO: for test_conf_map_all:
 errors = []
 no_conflict = []
-studies = chronogram.find()
+studies = chronogram.find_trees()
 for tag in studies:
     try:
-        res = map_conflict_ages(tag)
+        res = chronogram.map_conflict_ages(tag)
     except ValueError:
         errors.append(tag)
         print("study", tag, "threw an ERROR on map_conflict ages")

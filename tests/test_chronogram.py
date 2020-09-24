@@ -1,9 +1,12 @@
 import chronosynth
-from chronosynth.chronogram import find, node_ages, as_dendropy, map_conflict_ages
+from chronosynth import chronogram
+from chronosynth.chronogram import find_trees, node_ages, as_dendropy, map_conflict_ages
 
+def test_setup():
+    chronogram.set_prod()
 
 def test_find():
-    studies = find()
+    studies = find_trees()
     assert 'ot_1000@tree1' in set(studies)
     for tag in studies:
         print(tag)
@@ -25,8 +28,12 @@ def test_conf_map():
         # print(i)
 
 def test_no_conflict_data():
+## fails on dev bc study doesn't exist
+    chronogram.print_endpoint()
     res = map_conflict_ages('ot_1980@tree2')
+    assert res is None
+    ## all tips in tree map to same taxon
 
 # TODO: add test of map conflict for all from compare_dates.py
 def test_conf_map_all():
-  pass
+    pass
