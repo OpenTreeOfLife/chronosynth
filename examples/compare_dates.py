@@ -32,3 +32,4 @@ studies.index('ot_1876@tree1')
 studies[280]
 source_id=studies[69]
 map_conflict_ages('ot_1876@tree1')
+print((synth_node, res_ot1056['supported_nodes'][synth_node]['age'], res_ot1000['supported_nodes'][synth_node]['age'])) 

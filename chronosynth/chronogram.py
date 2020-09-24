@@ -80,12 +80,9 @@ def map_conflict_ages(source_id):
     """
     ages_data = node_ages(source_id)
     metadata = ages_data['metadata']
-    ## TODO:
-    # The following returns webservice call records (instead of version)
-    # and should be updated in python opentree
     version = OT.about()
-    synth_version = version['synth_tree_about'].response_dict
-    tax_version = version['taxonomy_about'].response_dict
+    synth_version = version['synth_tree_about']
+    tax_version = version['taxonomy_about']
     metadata['synth_version'] = (synth_version, tax_version)
     output_conflict = OT.conflict_info(study_id=metadata['study_id'], tree_id=metadata['tree_id'])
     conf = output_conflict.response_dict
