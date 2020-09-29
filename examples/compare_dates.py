@@ -13,6 +13,7 @@ for synth_node in res_ot1056['supported_nodes']:
 
 
 chronogram.set_dev()
+chronogram.set_prod()
 
 
 import math
