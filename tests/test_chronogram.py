@@ -36,4 +36,8 @@ def test_no_conflict_data():
 
 # TODO: add test of map conflict for all from compare_dates.py
 def test_conf_map_all():
-    pass
+    sources = ['ot_1000@tree1','ot_1056@Tr66755']
+    resp = chronogram.combine_ages_from_sources(sources)
+    assert list(resp.keys()) == ['metadata','node_ages']
+    assert len(resp['node_ages']['mrcaott129303ott149204']) == 2
+    assert resp['node_ages']['mrcaott129303ott149204'][0].keys() == dict_keys(['source_id', 'age', 'time_unit'])

@@ -2,6 +2,8 @@
 #!/usr/bin/env python3
 import sys
 import opentree
+import datetime
+import json
 from opentree import OT
 DC = opentree.object_conversion.DendropyConvert()
 
@@ -115,3 +117,67 @@ def map_conflict_ages(source_id):
             supported_nodes[witness] = {'age':age, 'node_label':node_label}
     ret = {'metadata':metadata, 'supported_nodes':supported_nodes}
     return ret
+
+
+def combine_ages_from_sources(source_ids, json_out = None, failed_sources = 'stderr'):
+#temporary name
+    
+    """
+    inputs: a list of source ids in format study_id@tree_id
+
+    Outputs: a dictionary
+    Key: node_id (or ott id) in synth tree
+    example
+     synth_node_ages['metadata']{'synth_info':12.3, 
+                            'date_processed':Today}
+     synth_node_ages['node_ages']:
+     {mrcaott123ott456 : {
+                          [
+                          {'source_id':"ot_1000@tree1", 
+                          'age': 48, 
+                          'node_label':node_label
+                          'units':'Mya'}
+                           ],
+                           }
+
+    can optionally write out studies with no conflict response and/or errors to a file speciified by "failed_sources"
+    """
+
+    if failed_sources == 'stderr':
+        f_errors = sys.stderr
+    else: 
+        f_errors = open(failed_sources, "w+")
+
+    synth_node_ages = {'metadata':{}, 'node_ages':{}}
+
+    versions = OT.about()
+    synth_node_ages['metadata']['synth_tree_about'] = versions['synth_tree_about']
+    synth_node_ages['metadata']['date'] = str(datetime.date.today())
+
+    for tag in source_ids:
+        try:
+            res = map_conflict_ages(tag)
+        except ValueError:
+            f_errors.write('{}, error\n'.format(tag))
+            continue
+        if res==None:
+            f_errors.write('{}, empty\n'.format(tag))
+        else:
+            sys.stdout.write("study {} has {} supported nodes\n".format(tag, len(res["supported_nodes"])))
+            source_id = tag
+            assert synth_node_ages['metadata']['synth_tree_about'] == res['metadata']['synth_tree_about']
+            time_unit = res['metadata']['time_unit']
+            assert tag == "{}@{}".format(res['metadata']['study_id'],res['metadata']['tree_id'])
+            for synth_node in res['supported_nodes']:
+                if synth_node not in synth_node_ages['node_ages']: #if not a record yet, we need to create one
+                    synth_node_ages['node_ages'][synth_node] = []
+                age = res['supported_nodes'][synth_node]['age']
+                entry = {'source_id': source_id, 'age':age, 'time_unit':time_unit}
+                synth_node_ages['node_ages'][synth_node].append(entry)
+
+    sf = json.dumps(synth_node_ages, sort_keys=True, indent=2, separators=(',', ': '), ensure_ascii=True)
+    if json_out is not None:
+        ofi = open(json_out,'w')
+        ofi.write(sf)
+        ofi.close()
+    return(synth_node_ages)
