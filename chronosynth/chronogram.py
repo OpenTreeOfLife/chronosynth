@@ -92,9 +92,7 @@ def map_conflict_ages(source_id):
     ages_data = node_ages(source_id)
     metadata = ages_data['metadata']
     version = OT.about()
-    synth_version = version['synth_tree_about']
-    tax_version = version['taxonomy_about']
-    metadata['synth_version'] = (synth_version, tax_version)
+    metadata['synth_tree_about'] = version['synth_tree_about']
     output_conflict = OT.conflict_info(study_id=metadata['study_id'], tree_id=metadata['tree_id'])
     conf = output_conflict.response_dict
     if(conf==None):
