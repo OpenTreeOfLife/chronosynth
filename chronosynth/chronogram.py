@@ -99,7 +99,7 @@ def map_conflict_ages(source_id):
     conf = output_conflict.response_dict
     if(conf==None):
         url = "https://tree.opentreeoflife.org/curator/study/view/{}/?tab=home&tree={}".format(metadata['study_id'], metadata['tree_id'])
-        sys.stderr.write("No conflict data available for tree {} \n Check its status at {}".format(source_id, url))
+        sys.stderr.write("No conflict data available for tree {} \n Check its status at {}\n".format(source_id, url))
         return(None)
     supported_nodes = {}
     for node_label in ages_data['ages']:
