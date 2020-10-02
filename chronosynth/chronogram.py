@@ -165,7 +165,7 @@ def combine_ages_from_sources(source_ids, json_out = None, failed_sources = 'std
         else:
             sys.stdout.write("study {} has {} supported nodes\n".format(tag, len(res["supported_nodes"])))
             source_id = tag
-            assert synth_node_ages['metadata']['synth_tree_about'] == res['metadata']['synth_tree_about']
+            #assert synth_node_ages['metadata']['synth_tree_about'] == res['metadata']['synth_tree_about']
             time_unit = res['metadata']['time_unit']
             assert tag == "{}@{}".format(res['metadata']['study_id'],res['metadata']['tree_id'])
             for synth_node in res['supported_nodes']:
