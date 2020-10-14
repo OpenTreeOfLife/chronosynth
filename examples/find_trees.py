@@ -1,7 +1,23 @@
 import chronosynth
-from chronosynth.chronogram import find_chronograms
+from chronosynth import chronogram
 
 
+studies = chronogram.find_trees()
+prod = set(studies)
 
-trees = find_chronograms()
-print(trees)
+chronogram.print_endpoint()
+
+chronogram.set_dev()
+
+chronogram.print_endpoint()
+
+
+studies = chronogram.find_trees()
+dev = set(studies)
+
+print("{} chrongrams in production\n".format(len(prod)))
+print("{} chrongrams in dev\n".format(len(dev)))
+
+print(prod.difference(dev))
+
+print(dev.difference(prod))

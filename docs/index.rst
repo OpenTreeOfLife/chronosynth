@@ -3,16 +3,14 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to chronosynth's documentation!
+Welcome to ChronoSynth's documentation!
 =======================================
 
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
 
 .. toctree::
    :maxdepth: 3
    :caption: Documentation topics:
 
+
+   install
    apidocs

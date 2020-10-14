@@ -1,2 +1,4 @@
 *.pyc
 *egg*
+venv*
+docs/_build
