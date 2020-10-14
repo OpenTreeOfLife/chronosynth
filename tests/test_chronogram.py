@@ -40,4 +40,4 @@ def test_conf_map_all():
     resp = chronogram.combine_ages_from_sources(sources)
     assert list(resp.keys()) == ['metadata','node_ages']
     assert len(resp['node_ages']['mrcaott129303ott149204']) == 2
-    assert list(resp['node_ages']['mrcaott129303ott149204'][0].keys()) == ['source_id', 'age', 'time_unit']
+    assert list(resp['node_ages']['mrcaott129303ott149204'][0].keys()) == ['source_id', 'age', 'time_unit', 'source_node']

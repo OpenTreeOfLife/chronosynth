@@ -2,13 +2,20 @@
 
 from opentree import OT
 from chronosynth import chronogram
+import sys
 import json
 # chronogram.set_dev()
 # chronogram.set_prod()
 
 ## We don't wnat to run these repeatedly...
-#sources = chronogram.find_trees()
-#resp = chronogram.combine_ages_from_sources(sources, json_out = "node_ages.json", failed_sources='no_conf.txt')
+
+outfile = "node_ages1.json"
+sources = chronogram.find_trees()
+resp = chronogram.combine_ages_from_sources(sources, json_out = outfile, failed_sources='no_conf.txt')
 
 
-resp = json.load("node_ages.json")
+old_resp = json.load(open("node_ages.json"))
+sys.stdout.write("Date estimates for {} nodes\n written to {}".format(len(resp["node_ages"]), outfile))
+
+
+sys.stdout.write("Previous file had date estimates for {} nodes\n written to {}".format(len(old_resp["node_ages"])))

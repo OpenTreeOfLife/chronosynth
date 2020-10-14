@@ -167,13 +167,20 @@ def combine_ages_from_sources(source_ids, json_out = None, failed_sources = 'std
             source_id = tag
             #assert synth_node_ages['metadata']['synth_tree_about'] == res['metadata']['synth_tree_about']
             time_unit = res['metadata']['time_unit']
-            assert tag == "{}@{}".format(res['metadata']['study_id'],res['metadata']['tree_id'])
-            for synth_node in res['supported_nodes']:
-                if synth_node not in synth_node_ages['node_ages']: #if not a record yet, we need to create one
-                    synth_node_ages['node_ages'][synth_node] = []
-                age = res['supported_nodes'][synth_node]['age']
-                entry = {'source_id': source_id, 'age':age, 'time_unit':time_unit}
-                synth_node_ages['node_ages'][synth_node].append(entry)
+            if time_unit != 'Myr':
+                if time_unit:
+                    sys.stderr.write("Source {} has units {}\n".format(source_id, time_unit))
+                else:
+                    sys.stderr.write("Source {} has no time units\n".format(time_unit))
+            else:
+                assert tag == "{}@{}".format(res['metadata']['study_id'],res['metadata']['tree_id'])
+                for synth_node in res['supported_nodes']:
+                    if synth_node not in synth_node_ages['node_ages']: #if not a record yet, we need to create one
+                        synth_node_ages['node_ages'][synth_node] = []
+                    age = res['supported_nodes'][synth_node]['age']
+                    source_node = res['supported_nodes'][synth_node]['node_label']
+                    entry = {'source_id': source_id, 'age':age, 'time_unit':time_unit, 'source_node':source_node}
+                    synth_node_ages['node_ages'][synth_node].append(entry)
 
     sf = json.dumps(synth_node_ages, sort_keys=True, indent=2, separators=(',', ': '), ensure_ascii=True)
     if json_out is not None:
