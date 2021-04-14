@@ -18,4 +18,4 @@ old_resp = json.load(open("node_ages.json"))
 sys.stdout.write("Date estimates for {} nodes\n written to {}".format(len(resp["node_ages"]), outfile))
 
 
-sys.stdout.write("Previous file had date estimates for {} nodes\n written to {}".format(len(old_resp["node_ages"])))
+sys.stdout.write("Previous file had date estimates for {} nodes\n written".format(len(old_resp["node_ages"])))
