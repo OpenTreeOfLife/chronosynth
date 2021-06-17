@@ -4,3 +4,4 @@ venv*
 docs/_build
 examples/.ipynb_checkpoints
 examples/multi_snacktavish_woodpeckers*
+examples/custom_synth.tar.gz
