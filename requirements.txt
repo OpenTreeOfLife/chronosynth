@@ -1,3 +1,4 @@
 
 -e git+https://github.com/OpenTreeOfLife/python-opentree@main#egg=opentree
 pytest
+sphinxcontrib-napoleon
