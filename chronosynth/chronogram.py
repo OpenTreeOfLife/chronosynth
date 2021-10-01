@@ -195,8 +195,8 @@ def synth_node_source_ages(node, cache_file_path):
     if os.path.exists(cache_file_path):
         dates = json.load(open(cache_file_path))
     else:
-        sources = chronogram.find_trees()
-        dates = chronogram.combine_ages_from_sources(sources, json_out = cache_file_path, failed_sources='no_conf.txt')
+        sources = find_trees()
+        dates = combine_ages_from_sources(sources, json_out = cache_file_path, failed_sources='no_conf.txt')
     retdict = {'ot:source_node_ages': []}
     if node in dates['node_ages']:
         retdict['ot:source_node_ages'] = dates['node_ages'][node]
