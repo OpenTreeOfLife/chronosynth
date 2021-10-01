@@ -190,13 +190,20 @@ def combine_ages_from_sources(source_ids, json_out = None, failed_sources = 'std
         ofi.close()
     return(synth_node_ages)
 
+def build_synth_node_source_ages(cache_file_path="/tmp/node_ages.json"):
+    if os.path.exists(cache_file_path):
+        return 0
+        ##Check SHA? or...
+    sources = find_trees()
+    dates = combine_ages_from_sources(sources, json_out = cache_file_path, failed_sources='no_conf.txt')
+    return 0
+
 def synth_node_source_ages(node, cache_file_path):
     ##check if node is in synth?
     if os.path.exists(cache_file_path):
         dates = json.load(open(cache_file_path))
     else:
-        sources = find_trees()
-        dates = combine_ages_from_sources(sources, json_out = cache_file_path, failed_sources='no_conf.txt')
+        build_synth_node_source_ages(cache_file_path)
     retdict = {'ot:source_node_ages': []}
     if node in dates['node_ages']:
         retdict['ot:source_node_ages'] = dates['node_ages'][node]
