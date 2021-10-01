@@ -1,6 +1,7 @@
 """Functions for working with chronograms from Phylesystem"""
 #!/usr/bin/env python3
 import sys
+import os
 import opentree
 import datetime
 import json
@@ -188,3 +189,15 @@ def combine_ages_from_sources(source_ids, json_out = None, failed_sources = 'std
         ofi.write(sf)
         ofi.close()
     return(synth_node_ages)
+
+def synth_node_source_ages(node, cache_file_path):
+    ##check if node is in synth?
+    if os.path.exists(cache_file_path):
+        dates = json.load(open(cache_file_path))
+    else:
+        sources = chronogram.find_trees()
+        dates = chronogram.combine_ages_from_sources(sources, json_out = cache_file_path, failed_sources='no_conf.txt')
+    retdict = {'ot:source_node_ages': []}
+    if node in dates['node_ages']:
+        retdict['ot:source_node_ages'] = dates['node_ages'][node]
+    return retdict
