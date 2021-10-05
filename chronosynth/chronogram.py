@@ -8,6 +8,13 @@ import json
 import subprocess
 import re
 from opentree import OT
+
+import logging
+
+log = logging.getLogger(__name__)
+log.debug("logging set to debug")
+
+
 DC = opentree.object_conversion.DendropyConvert()
 
 
@@ -22,6 +29,7 @@ def set_prod():
 
 def print_endpoint():
     print(OT._api_endpoint)
+    log.debug("api_endpoint is %s", format(OT._api_endpoint))
 
 def find_trees():
     """
