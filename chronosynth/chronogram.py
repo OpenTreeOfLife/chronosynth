@@ -5,6 +5,8 @@ import os
 import opentree
 import datetime
 import json
+import subprocess
+import re
 from opentree import OT
 DC = opentree.object_conversion.DendropyConvert()
 
@@ -154,6 +156,7 @@ def combine_ages_from_sources(source_ids, json_out = None, failed_sources = 'std
     versions = OT.about()
     synth_node_ages['metadata']['synth_tree_about'] = versions['synth_tree_about']
     synth_node_ages['metadata']['date'] = str(datetime.date.today())
+    synth_node_ages['metadata']['phylesystem_sha'] = get_phylesystem_sha()
 
     for tag in source_ids:
         try:
@@ -190,13 +193,33 @@ def combine_ages_from_sources(source_ids, json_out = None, failed_sources = 'std
         ofi.close()
     return(synth_node_ages)
 
+#This should probably go in peyotl....
+def get_phylesystem_sha(repo_url = "https://github.com/OpenTreeOfLife/phylesystem-1.git"):
+    process = subprocess.Popen(["git", "ls-remote", repo_url], stdout=subprocess.PIPE)
+    stdout, stderr = process.communicate()
+    sha = re.split(r'\t+', stdout.decode('ascii'))[0]
+    return sha
+
+
 def build_synth_node_source_ages(cache_file_path="/tmp/node_ages.json"):
+    #OT = opentree.ot_object.OpenTree()
+    #peyotl.git_storage.git_action.get_HEAD_SHA1("../shards/phylesystem-1/.git")
     if os.path.exists(cache_file_path):
-        return 0
-        ##Check SHA? or...
+        dates = json.load(open(cache_file_path))
+        current_sha = get_phylesystem_sha() 
+        # always remote?? 
+        # find trees relies on otindex, which relies on github... so maybe remote is best even if a lil slo?
+        cached_sha = dates['metadata'].get('phylesystem_sha')
+        if cached_sha == current_sha:
+            sys.stdout.write("No changes to phylesystem, using chaged dates at {}\n".format(cache_file_path))
+        if cached_sha != current_sha:
+            sys.stdout.write("Phylesystem has changes since dates were cached, reloading and saving to {}\n".format(cache_file_path))
+            sources = find_trees()
+            dates = combine_ages_from_sources(sources, json_out = cache_file_path, failed_sources='no_conf.txt')
+            return
     sources = find_trees()
     dates = combine_ages_from_sources(sources, json_out = cache_file_path, failed_sources='no_conf.txt')
-    return 0
+    return
 
 def synth_node_source_ages(node, cache_file_path):
     ##check if node is in synth?

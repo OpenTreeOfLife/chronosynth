@@ -41,3 +41,7 @@ def test_conf_map_all():
     assert list(resp.keys()) == ['metadata','node_ages']
     assert len(resp['node_ages']['mrcaott129303ott149204']) == 2
     assert list(resp['node_ages']['mrcaott129303ott149204'][0].keys()) == ['source_id', 'age', 'time_unit', 'source_node']
+
+def test_get_phylesystem_sha():
+    sha = chronogram.get_phylesystem_sha()
+    assert len(sha) == 40
