@@ -8,3 +8,4 @@ logging.basicConfig(filename='chronosynth.log',
                     filemode='w', 
                     level=logging.DEBUG,
                     format='%(name)s - %(levelname)s - %(message)s')
+

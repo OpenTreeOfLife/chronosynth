@@ -219,23 +219,34 @@ def build_synth_node_source_ages(cache_file_path="/tmp/node_ages.json"):
         # find trees relies on otindex, which relies on github... so maybe remote is best even if a lil slo?
         cached_sha = dates['metadata'].get('phylesystem_sha')
         if cached_sha == current_sha:
-            sys.stdout.write("No changes to phylesystem, using chaged dates at {}\n".format(cache_file_path))
+            sys.stdout.write("No new changes to phylesystem, using cached dates at {}\n".format(cache_file_path))
+            return dates
         if cached_sha != current_sha:
             sys.stdout.write("Phylesystem has changes since dates were cached, reloading and saving to {}\n".format(cache_file_path))
             sources = find_trees()
             dates = combine_ages_from_sources(sources, json_out = cache_file_path, failed_sources='no_conf.txt')
-            return
-    sources = find_trees()
-    dates = combine_ages_from_sources(sources, json_out = cache_file_path, failed_sources='no_conf.txt')
-    return
-
-def synth_node_source_ages(node, cache_file_path):
-    ##check if node is in synth?
-    if os.path.exists(cache_file_path):
-        dates = json.load(open(cache_file_path))
+            return dates
     else:
-        build_synth_node_source_ages(cache_file_path)
+        sources = find_trees()
+        dates = combine_ages_from_sources(sources, json_out = cache_file_path, failed_sources='no_conf.txt')
+    return dates
+
+def synth_node_source_ages(node, cache_file_path="/tmp/node_ages.json"):
+    ##check if node is in synth?
+    synth_resp = OT.synth_node_info(node)
+    if synth_resp.status_code == 400:
+        if node.strip('ott').isnumeric():
+            tax_resp = OT.taxon_info(node)
+            if tax_resp.status_code == 200:
+                msg = "node {} not found in synthetic tree, but is in taxonomy. \
+                       Dates for taxonomy only nodes are not supported (YET)\n".format(node)
+                retdict = {'msg': msg, 'synth_response': synth_resp.response_dict, 'tax_response': tax_resp.response_dict }
+                return retdict
+        else:
+            msg = "node {} not found in synthetic tree or taxonomy".format(node)
+            retdict = {'msg': msg, 'synth_response': synth_resp.response_dict, 'tax_response': None}
+            return retdict
+    dates = build_synth_node_source_ages(cache_file_path)
     retdict = {'ot:source_node_ages': []}
-    if node in dates['node_ages']:
-        retdict['ot:source_node_ages'] = dates['node_ages'][node]
+    retdict['ot:source_node_ages'] = dates['node_ages'].get(node)
     return retdict

@@ -45,3 +45,7 @@ def test_conf_map_all():
 def test_get_phylesystem_sha():
     sha = chronogram.get_phylesystem_sha()
     assert len(sha) == 40
+
+def test_synth_node_source_ages():
+    # needs to handle bad node, bad taxon, good node, new sha...
+    pass
