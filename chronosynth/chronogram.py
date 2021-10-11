@@ -234,19 +234,26 @@ def build_synth_node_source_ages(cache_file_path="/tmp/node_ages.json"):
 def synth_node_source_ages(node, cache_file_path="/tmp/node_ages.json"):
     ##check if node is in synth?
     synth_resp = OT.synth_node_info(node)
-    if synth_resp.status_code == 400:
-        if node.strip('ott').isnumeric():
+    retdict = {}
+    retdict['query'] = node
+    if synth_resp.status_code == 200:
+        resp_node = synth_resp.response_dict[0]['node_id']
+        retdict['synth_node_id'] = resp_node
+        if node.startswith('ott'):
+            if node != resp_node:
+                msg = "Taxon {} is not monophyletic.\
+                    resolving to MRCA: synth_node {}, and reporting dates for that\n".format(node, synth_resp)
+                retdict['msg'] =  msg
+        dates = build_synth_node_source_ages(cache_file_path)
+        retdict['ot:source_node_ages'] = dates['node_ages'].get(node)
+    else:
+        if node.startswith('ott') and node.strip('ott').isnumeric():
             tax_resp = OT.taxon_info(node)
             if tax_resp.status_code == 200:
-                msg = "node {} not found in synthetic tree, but is in taxonomy. \
-                       Dates for taxonomy only nodes are not supported (YET)\n".format(node)
+                msg = "Taxon {} is in the taxonomy, but cannot be found in the synth tree\n".format(node)
+                retdict['msg'] =  msg
                 retdict = {'msg': msg, 'synth_response': synth_resp.response_dict, 'tax_response': tax_resp.response_dict }
-                return retdict
         else:
             msg = "node {} not found in synthetic tree or taxonomy".format(node)
-            retdict = {'msg': msg, 'synth_response': synth_resp.response_dict, 'tax_response': None}
-            return retdict
-    dates = build_synth_node_source_ages(cache_file_path)
-    retdict = {'ot:source_node_ages': []}
-    retdict['ot:source_node_ages'] = dates['node_ages'].get(node)
+            retdict = {'msg': msg, 'synth_response': synth_resp.response_dict}
     return retdict
