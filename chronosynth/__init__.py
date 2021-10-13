@@ -11,7 +11,7 @@ import os
 if 'CHRONOSYNTH_CONFIG_FILE' in os.environ:
     cfn = os.path.abspath(os.environ['CHRONOSYNTH_CONFIG_FILE'])
 else:
-    cfn = os.path.expanduser("~/.chrnosynth/config")
+    cfn = os.path.expanduser("~/.chronosynth/config.ini")
 
 if not os.path.isfile(cfn):
     if 'CHRONOSYNTH_CONFIG_FILE' in os.environ:
