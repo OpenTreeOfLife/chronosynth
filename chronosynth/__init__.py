@@ -7,5 +7,6 @@ import os
 
 #https://medium.com/@narengowda/better-pyramid-logging-with-python-and-log-configurationsyoure-up-and-running-c47203dfaff2
 
-configfile = chronosynth_dir = os.path.dirname(__file__) + '/../log.config'
+configfile = os.path.dirname(__file__) + '/../chronosynth.config'
 logging.config.fileConfig(configfile)
+

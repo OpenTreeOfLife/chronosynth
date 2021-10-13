@@ -7,9 +7,17 @@ import datetime
 import json
 import subprocess
 import re
+import configparser
+
 from opentree import OT
 
 import logging
+
+import chronosynth
+
+config = configparser.ConfigParser()
+config.read(chronosynth.configfile)
+
 
 log = logging.getLogger(__name__)
 log.debug("logging set to debug")
@@ -209,9 +217,10 @@ def get_phylesystem_sha(repo_url = "https://github.com/OpenTreeOfLife/phylesyste
     return sha
 
 
-def build_synth_node_source_ages(cache_file_path="/tmp/node_ages.json"):
-    #OT = opentree.ot_object.OpenTree()
-    #peyotl.git_storage.git_action.get_HEAD_SHA1("../shards/phylesystem-1/.git")
+def build_synth_node_source_ages(cache_file_path=None):
+    if cache_file_path == None:
+        cache_file_path = config.get('Paths', 'cache_file_path',
+                                     fallback='/tmp/node_ages.json')
     if os.path.exists(cache_file_path):
         dates = json.load(open(cache_file_path))
         current_sha = get_phylesystem_sha() 
@@ -231,7 +240,11 @@ def build_synth_node_source_ages(cache_file_path="/tmp/node_ages.json"):
         dates = combine_ages_from_sources(sources, json_out = cache_file_path, failed_sources='no_conf.txt')
     return dates
 
-def synth_node_source_ages(node, cache_file_path="/tmp/node_ages.json"):
+def synth_node_source_ages(node, cache_file_path=None):
+    if cache_file_path == None:
+        cache_file_path = config.get('Paths', 'cache_file_path',
+                                     fallback='/tmp/node_ages.json')
+    log.debug("cahche file path")
     ##check if node is in synth?
     synth_resp = OT.synth_node_info(node)
     retdict = {}
