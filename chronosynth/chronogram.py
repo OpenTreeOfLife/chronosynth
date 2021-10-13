@@ -261,14 +261,18 @@ def synth_node_source_ages(node, cache_file_path=None):
                 retdict['msg'] =  msg
         dates = build_synth_node_source_ages(cache_file_path)
         retdict['ot:source_node_ages'] = dates['node_ages'].get(node)
-    else:
-        if node.startswith('ott') and node.strip('ott').isnumeric():
-            tax_resp = OT.taxon_info(node)
-            if tax_resp.status_code == 200:
-                msg = "Taxon {} is in the taxonomy, but cannot be found in the synth tree\n".format(node)
-                retdict['msg'] =  msg
-                retdict = {'msg': msg, 'synth_response': synth_resp.response_dict, 'tax_response': tax_resp.response_dict }
+    elif node.startswith('ott') and node.strip('ott').isnumeric():
+        tax_resp = OT.taxon_info(node)
+        if tax_resp.status_code == 200:
+            msg = "Taxon {} is in the taxonomy, but cannot be found in the synth tree\n".format(node)
+            retdict['msg'] =  msg
+            retdict = {'msg': msg, 'synth_response': synth_resp.response_dict, 'tax_response': tax_resp.response_dict }
         else:
             msg = "node {} not found in synthetic tree or taxonomy".format(node)
+            retdict = {'msg': msg, 'synth_response': synth_resp.response_dict, 'tax_response': tax_resp.response_dict}
+    else:
+        else:
+            msg = "node {} not found in synthetic tree or taxonomy.".format(node)
             retdict = {'msg': msg, 'synth_response': synth_resp.response_dict}
+
     return retdict
