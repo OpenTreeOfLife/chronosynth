@@ -17,8 +17,11 @@ if not os.path.isfile(cfn):
     if 'CHRONOSYNTH_CONFIG_FILE' in os.environ:
         sys.stderr.write('Filepath "{}" specified via CHRONOSYNTH_CONFIG_FILE={} was not found'.format(cfn, os.environ[
                     'CHRONOSYNTH_CONFIG_FILE']))
+    else:
+        cfn = os.path.dirname(__file__) + '/default.config'
 
-cfn = os.path.dirname(__file__) + '/default.config'
+
+
 
 if not os.path.isfile(cfn):
     raise RuntimeError('The peyotl configuration file cascade failed looking for "{}"'.format(cfn))
