@@ -164,6 +164,8 @@ def combine_ages_from_sources(source_ids, json_out = None, failed_sources = 'std
 
     if failed_sources == 'stderr':
         f_errors = sys.stderr
+    elif failed_sources == 'log':
+        f_error = log
     else: 
         f_errors = open(failed_sources, "w+")
 
