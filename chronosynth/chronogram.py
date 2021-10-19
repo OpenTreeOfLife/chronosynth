@@ -73,7 +73,7 @@ def as_dendropy(source_id):
     tree_obj = DC.tree_from_nexson(study_nexson, tree_id)
     return tree_obj
 
-def node_ages(source_id):
+def node_ages(source_id, ultrametricity_precision=None):
     """
     Get node ages for a DendroPy tree object.
 
@@ -85,6 +85,10 @@ def node_ages(source_id):
     }
 
     """
+    if ultrametricity_precision == None:
+        ultrametricity_precision = float(config.get('params', 'ultrametricity_precision',
+                                     fallback='0.01'))
+
     study_id = source_id.split('@')[0]
     tree_id = source_id.split('@')[1]
     dp_tree = as_dendropy(source_id)
@@ -92,7 +96,7 @@ def node_ages(source_id):
     time_unit = dp_tree.annotations.get_value("branchLengthTimeUnit")
     metadata = {'study_id': study_id, 'tree_id': tree_id, 'time_unit' :time_unit}
     ages = {}
-    dp_tree.internal_node_ages()
+    dp_tree.internal_node_ages(ultrametricity_precision=ultrametricity_precision)
     for node in dp_tree.internal_nodes():
         assert node.label not in ages.keys()
         ages[node.label] = node.age
@@ -138,7 +142,7 @@ def map_conflict_ages(source_id):
     return ret
 
 
-def combine_ages_from_sources(source_ids, json_out = None, failed_sources = 'stderr'):
+def combine_ages_from_sources(source_ids, json_out = None):
 #temporary name
     
     """
@@ -153,21 +157,12 @@ def combine_ages_from_sources(source_ids, json_out = None, failed_sources = 'std
      {mrcaott123ott456 : {
                           [
                           {'source_id':"ot_1000@tree1", 
-                          'age': 48, 
+                          'age_mya': 48, 
                           'node_label':node_label
-                          'units':'Mya'}
                            ],
                            }
 
-    can optionally write out studies with no conflict response and/or errors to a file speciified by "failed_sources"
     """
-
-    if failed_sources == 'stderr':
-        f_errors = sys.stderr
-    elif failed_sources == 'log':
-        f_error = log
-    else: 
-        f_errors = open(failed_sources, "w+")
 
     synth_node_ages = {'metadata':{}, 'node_ages':{}}
 
@@ -175,34 +170,32 @@ def combine_ages_from_sources(source_ids, json_out = None, failed_sources = 'std
     synth_node_ages['metadata']['synth_tree_about'] = versions['synth_tree_about']
     synth_node_ages['metadata']['date'] = str(datetime.date.today())
     synth_node_ages['metadata']['phylesystem_sha'] = get_phylesystem_sha()
-
     for tag in source_ids:
         try:
             res = map_conflict_ages(tag)
         except ValueError:
-            f_errors.write('{}, error\n'.format(tag))
+            time_unit = res['metadata']['time_unit']
+            log.info('{}, conflict error, {}\n'.format(tag, time_unit))
             continue
         if res==None:
-            f_errors.write('{}, empty\n'.format(tag))
+            log.info('{}, conflict empty\n'.format(tag))
         else:
             sys.stdout.write("study {} has {} supported nodes\n".format(tag, len(res["supported_nodes"])))
             source_id = tag
-            #assert synth_node_ages['metadata']['synth_tree_about'] == res['metadata']['synth_tree_about']
+            # assert synth_node_ages['metadata']['synth_tree_about'] == res['metadata']['synth_tree_about']
             time_unit = res['metadata']['time_unit']
-            if time_unit != 'Myr':
-                if time_unit:
-                    sys.stderr.write("Source {} has units {}\n".format(source_id, time_unit))
-                else:
-                    sys.stderr.write("Source {} has no time units\n".format(time_unit))
-            else:
+            if time_unit == 'Myr':
                 assert tag == "{}@{}".format(res['metadata']['study_id'],res['metadata']['tree_id'])
                 for synth_node in res['supported_nodes']:
                     if synth_node not in synth_node_ages['node_ages']: #if not a record yet, we need to create one
                         synth_node_ages['node_ages'][synth_node] = []
                     age = res['supported_nodes'][synth_node]['age']
                     source_node = res['supported_nodes'][synth_node]['node_label']
-                    entry = {'source_id': source_id, 'age':age, 'time_unit':time_unit, 'source_node':source_node}
+                    entry = {'source_id': source_id, 'age_mya':age, 'source_node':source_node}
                     synth_node_ages['node_ages'][synth_node].append(entry)
+            else:
+                #skips all tree not in mya
+                pass
 
     sf = json.dumps(synth_node_ages, sort_keys=True, indent=2, separators=(',', ': '), ensure_ascii=True)
     if json_out is not None:
@@ -221,7 +214,7 @@ def get_phylesystem_sha(repo_url = "https://github.com/OpenTreeOfLife/phylesyste
 
 def build_synth_node_source_ages(cache_file_path=None):
     if cache_file_path == None:
-        cache_file_path = config.get('Paths', 'cache_file_path',
+        cache_file_path = config.get('paths', 'cache_file_path',
                                      fallback='/tmp/node_ages.json')
     if os.path.exists(cache_file_path):
         dates = json.load(open(cache_file_path))
@@ -235,18 +228,18 @@ def build_synth_node_source_ages(cache_file_path=None):
         if cached_sha != current_sha:
             sys.stdout.write("Phylesystem has changes since dates were cached, reloading and saving to {}\n".format(cache_file_path))
             sources = find_trees()
-            dates = combine_ages_from_sources(sources, json_out = cache_file_path, failed_sources='no_conf.txt')
+            dates = combine_ages_from_sources(sources, json_out = cache_file_path)
             return dates
     else:
         sources = find_trees()
-        dates = combine_ages_from_sources(sources, json_out = cache_file_path, failed_sources='no_conf.txt')
+        dates = combine_ages_from_sources(sources, json_out = cache_file_path)
     return dates
 
 def synth_node_source_ages(node, cache_file_path=None):
     if cache_file_path == None:
         cache_file_path = config.get('Paths', 'cache_file_path',
                                      fallback='/tmp/node_ages.json')
-    log.debug("cahche file path")
+    log.debug("cache file path %s" % cache_file_path)
     ##check if node is in synth?
     synth_resp = OT.synth_node_info(node)
     retdict = {}
@@ -271,7 +264,6 @@ def synth_node_source_ages(node, cache_file_path=None):
             msg = "node {} not found in synthetic tree or taxonomy".format(node)
             retdict = {'msg': msg, 'synth_response': synth_resp.response_dict, 'tax_response': tax_resp.response_dict}
     else:
-        else:
             msg = "node {} not found in synthetic tree or taxonomy.".format(node)
             retdict = {'msg': msg, 'synth_response': synth_resp.response_dict}
 
