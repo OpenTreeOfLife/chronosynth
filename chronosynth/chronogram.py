@@ -39,7 +39,7 @@ def print_endpoint():
     print(OT._api_endpoint)
     log.debug("api_endpoint is %s", format(OT._api_endpoint))
 
-def find_trees():
+def find_trees(search_property="ot:branchLengthMode", value="ot:time"):
     """
     Get study and tree ids for all chronograms (trees with branch lengths proportional
     to time) in Phylesystem, i.e., where 'ot:branchLengthMode' == 'ot:time'
@@ -48,7 +48,7 @@ def find_trees():
     -------
     A list of Phylesystem chronogram's source ids: study_id@treeid.
     """
-    output = OT.find_trees(search_property="ot:branchLengthMode", value="ot:time")
+    output = OT.find_trees(search_property=search_property, value=value)
     chronograms = set()
     for study in output.response_dict["matched_studies"]:
         study_id = study['ot:studyId']
@@ -104,7 +104,7 @@ def node_ages(source_id, ultrametricity_precision=None):
     return ret
 
 
-def map_conflict_ages(source_id):
+def map_conflict_ages(source_id, ultrametricity_precision=None):
     """
     Takes a source id in format study_id@tree_id
 
@@ -114,7 +114,7 @@ def map_conflict_ages(source_id):
     'supported_nodes':{synth_node_id : {'age':age, 'node_label':node_label}}
     }
     """
-    ages_data = node_ages(source_id)
+    ages_data = node_ages(source_id, ultrametricity_precision=ultrametricity_precision)
     metadata = ages_data['metadata']
     version = OT.about()
     metadata['synth_tree_about'] = version['synth_tree_about']
@@ -142,7 +142,40 @@ def map_conflict_ages(source_id):
     return ret
 
 
-def combine_ages_from_sources(source_ids, json_out = None):
+def map_conflict_nodes(source_id):
+    """
+    Takes a source id in format study_id@tree_id
+
+    returns a dictionary of:
+    {
+    'matched_nodes':{node_id : synnode_label}}
+    }
+    """
+    study_id = source_id.split('@')[0]
+    tree_id = source_id.split('@')[1]
+    dp_tree = as_dendropy(source_id)
+    time_unit = dp_tree.annotations.get_value("branchLengthTimeUnit")
+    metadata = {'study_id': study_id, 'tree_id': tree_id}
+    output_conflict = OT.conflict_info(study_id, tree_id)
+    conf = output_conflict.response_dict
+    if(conf==None):
+        url = "https://tree.opentreeoflife.org/curator/study/view/{}/?tab=home&tree={}".format(metadata['study_id'], metadata['tree_id'])
+        sys.stderr.write("No conflict data available for tree {} \n Check its status at {}\n".format(source_id, url))
+        return(None)
+    matched_nodes = {}
+    for node in dp_tree:
+        if node.label in conf:
+            node_conf = conf[node.label]
+            status = node_conf['status']
+            witness = node_conf['witness']
+            if status == 'supported_by':
+                matched_nodes[node.label] = witness
+    ret = {'metadata':metadata, 'matched_nodes':matched_nodes}
+    return ret
+
+
+
+def combine_ages_from_sources(source_ids, ultrametricity_precision=None, json_out = None):
 #temporary name
     
     """
@@ -157,7 +190,7 @@ def combine_ages_from_sources(source_ids, json_out = None):
      {mrcaott123ott456 : {
                           [
                           {'source_id':"ot_1000@tree1", 
-                          'age_mya': 48, 
+                          'age': 48, 
                           'node_label':node_label
                            ],
                            }
@@ -172,7 +205,7 @@ def combine_ages_from_sources(source_ids, json_out = None):
     synth_node_ages['metadata']['phylesystem_sha'] = get_phylesystem_sha()
     for tag in source_ids:
         try:
-            res = map_conflict_ages(tag)
+            res = map_conflict_ages(tag, ultrametricity_precision=ultrametricity_precision)
         except ValueError:
             time_unit = res['metadata']['time_unit']
             log.info('{}, conflict error, {}\n'.format(tag, time_unit))
@@ -191,7 +224,7 @@ def combine_ages_from_sources(source_ids, json_out = None):
                         synth_node_ages['node_ages'][synth_node] = []
                     age = res['supported_nodes'][synth_node]['age']
                     source_node = res['supported_nodes'][synth_node]['node_label']
-                    entry = {'source_id': source_id, 'age_mya':age, 'source_node':source_node}
+                    entry = {'source_id': source_id, 'age':age, 'source_node':source_node}
                     synth_node_ages['node_ages'][synth_node].append(entry)
             else:
                 #skips all tree not in mya
@@ -212,7 +245,7 @@ def get_phylesystem_sha(repo_url = "https://github.com/OpenTreeOfLife/phylesyste
     return sha
 
 
-def build_synth_node_source_ages(cache_file_path=None):
+def build_synth_node_source_ages(cache_file_path=None, ultrametricity_precision=None):
     if cache_file_path == None:
         cache_file_path = config.get('paths', 'cache_file_path',
                                      fallback='/tmp/node_ages.json')
@@ -228,7 +261,7 @@ def build_synth_node_source_ages(cache_file_path=None):
         if cached_sha != current_sha:
             sys.stdout.write("Phylesystem has changes since dates were cached, reloading and saving to {}\n".format(cache_file_path))
             sources = find_trees()
-            dates = combine_ages_from_sources(sources, json_out = cache_file_path)
+            dates = combine_ages_from_sources(sources, ultrametricity_precision=ultrametricity_precision, json_out = cache_file_path)
             return dates
     else:
         sources = find_trees()
