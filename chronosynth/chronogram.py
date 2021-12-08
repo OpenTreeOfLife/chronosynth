@@ -170,7 +170,7 @@ def map_conflict_nodes(source_id):
             witness = node_conf['witness']
             if status == 'supported_by':
                 matched_nodes[node.label] = witness
-    ret = {'metadata':metadata, 'matched_nodes':matched_nodes}
+    ret = {'metadata':metadata, 'matched_nodes':matched_nodes, 'tree':dp_tree}
     return ret
 
 
