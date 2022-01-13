@@ -10,9 +10,11 @@ sc = chronogram.find_trees(value='ot:substitutionCount')
 #source = 'ot_303@Tr62284'
 
 #source = 'pg_1098@tree2158'
-#source = sc[10]
+source = sc[12]
 
-source = 'pg_61@tree816'
+#source = 'pg_61@tree816'
+
+source = 'pg_2551@tree6180'
 
 maps = chronogram.map_conflict_nodes(source)
 
@@ -51,8 +53,10 @@ for node_label in maps['matched_nodes']:
         mrca_dict[node_label]['tips'] = [ti.taxon.label.replace(' ','_') for ti in nd.leaf_iter()]
 #        assert(maps['tree'].mrca(taxon_labels=mrca_dict[node_label]['tips']).label == node_label)
 
-##Set some sort of uniform prior on the root informed by taxonomy?
 ##
+if len(mrca_dict) == 0:
+    print("no calibrations")
+    exit()
 
 fi=open('test_prior.txt','w')
 for dated_node in mrca_dict:
@@ -62,8 +66,20 @@ for dated_node in mrca_dict:
     fi.write(' ')
     ages = [source['age'] for source in mrca_dict[dated_node]['ages']]
     avgage = sum(ages)/len(ages)
-    fi.write('ln({},{},{})\n'.format(avgage, avgage, avgage))
+    fi.write('norm({},{},{})\n'.format(0, 0.01*avgage, 0.8*avgage))
 
 fi.close()
 
-os.system("fastdate --method_nodeprior --tree_file test.tre --prior_file test_prior.txt --out_file node_prior.tre --bd_mu 1 --bd_lambda 4 --max_age 100 --bd_rho 1 --show_tree --grid 100 --rate_mean 5 --rate_variance 1")
+
+ott_taxa = []
+for taxon in maps['tree'].taxon_namespace:
+     ott_taxa.append('ott' + str(taxon.ott_id))
+
+
+##Set some sort of uniform prior on the root informed by taxonomy?
+## and We actually have a good estimate on bd_rho!!
+
+#os.system("fastdate --method_nodeprior --tree_file test.tre --prior_file test_prior.txt --out_file node_prior.tre --max_age 100 --bd_rho 1 --show_tree --grid 100")
+
+
+###### Remind self what the calibratrions even meaaaaaannn
