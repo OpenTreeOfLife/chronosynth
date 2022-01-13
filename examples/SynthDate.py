@@ -4,10 +4,22 @@ import dendropy
 import json
 
 
+
+from opentree import OT, taxonomy_helpers, util
+
+
+#all_families = taxonomy_helpers.get_ott_ids_group_and_rank(group_ott_id=93302, 
+#                                                           rank='order', 
+#                                                           taxonomy_file='../../ott3.3/taxonomy.tsv')
+
 # Grab the phylo only synth tree
 #!wget https://files.opentreeoflife.org/synthesis/opentree13.4/output/grafted_solution/grafted_solution.tre
 
 full_synth_tree = dendropy.Tree.get_from_path('grafted_solution.tre', schema = 'newick')
+#ret = taxonomy_helpers.labelled_induced_synth(ott_ids = all_families, label_format="id")
+#family_tree = ret['labelled_tree']
+
+len(full_synth_tree.leaf_nodes())
 
 chronogram.build_synth_node_source_ages(ultrametricity_precision=0.01)
 
@@ -41,6 +53,26 @@ for node in full_synth_tree:
             undated_nodes.add(lab)
 
 
+for node in full_synth_tree:
+    lab = None
+    if node.label:
+        if node.label.startswith('mrca'):
+            lab = node.label
+        elif node.label.startswith('ott'):
+            lab = node.label
+        else:
+            lab = node.label.split()[-1]
+        if lab in dates['node_ages']:
+            dated_nodes.add(lab)
+            age_range = [float(source['age']) for source in dates['node_ages'][lab]]
+            age_est = sum(age_range) / len(age_range)
+            node.
+            # This uses the average age across multiple age estimates.
+            ages.write("{}\t{}\n".format(node.label, age_est))
+        else:
+            undated_nodes.add(lab)
+
+
 len(dated_nodes)
 
-custom_synth_tree.write(path = "bladj_input.tre", schema = "newick")
+full_synth_tree.write(path = "bladj_input.tre", schema = "newick")
