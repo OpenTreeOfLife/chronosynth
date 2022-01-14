@@ -1,6 +1,7 @@
 import json
 import os
 import dendropy
+import random
 from chronosynth import chronogram
 from opentree import OT
 
@@ -9,21 +10,20 @@ from opentree import OT
 ##Load dates
 dates = json.load(open("../node_ages.json"))
 
-input_node = 'ott889366'
+input_ott_id = '889366'
 
-assert(input_node in dates['node_ages'])
+assert('ott'+input_ott_id in dates['node_ages'])
 max_age = max([source['age'] for source in dates['node_ages'][input_node]]) * 1.25
 
-output = OT.synth_subtree(ott_id='7510294', label_format='id')
+output = OT.synth_subtree(ott_id='input_ott_id', label_format='id')
 
-dp_tree = dendropy.Tree.get_from_path('../../opentree13.4_tree/labelled_supertree/labelled_supertree.tre', schema = 'newick')
+#synth_tree = dendropy.Tree.get_from_path('../../opentree13.4_tree/labelled_supertree/labelled_supertree.tre', schema = 'newick')
+#tree2 = dendropy.Tree(dp_tree)
+#node_of_interest = tree2.find_node_with_label(input_node)
+#subtree = dendropy.Tree(seed_node=node_of_interest) 
 
-
-tree2 = dendropy.Tree(dp_tree)
-node_of_interest = tree2.find_node_with_label(input_node)
-subtree = dendropy.Tree(seed_node=node_of_interest) 
+subtree = dendropy.Tree.get_from_string(output.response_dict['newick'], schema = 'newick')
 subtree.write(path="unresolved.tre", schema="newick")
-
 
 mrca_dict = {}
 for node in subtree:
@@ -64,15 +64,19 @@ fi.close()
 ##Set some sort of uniform prior on the root informed by taxonomy?
 ## and We actually have a good estimate on bd_rho!!
 
-for i in range(20):
+for i in range(10):
     subtree=dendropy.Tree.get_from_path("unresolved.tre", schema="newick")
-    subtree.resolve_polytomies()
+    subtree.resolve_polytomies(rng=random)
     for edge in subtree.inorder_edge_iter():
         if (edge.tail_node is not None) and (edge.length is None):
-            edge.length = 0.1
+            edge.length = 0.01
         if edge.length == 0:
             edge.length = 0.001
-    os.system("fastdate --method_nodeprior --tree_file test.tre --prior_file test_prior.txt --out_file node_prior{}.tre --max_age {} --bd_rho 1 --grid 100".format(i, max_age))
+    subtree.write(path="test{}.tre".format(i), schema="newick")
+    os.system("fastdate --method_nodeprior --tree_file test{}.tre --prior_file test_prior.txt --out_file node_prior{}.tre --max_age {} --bd_rho 1 --grid 100".format(i,i, max_age))
+
+
+os.system("sumtrees.py --set-edges=mean-age --summarize-node-ages node_prior*.tre > sumtre.tre")
 
 
 
