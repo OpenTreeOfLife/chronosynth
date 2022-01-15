@@ -7,6 +7,8 @@ import datetime
 import json
 import subprocess
 import re
+import dendropy
+import random
 import configparser
 
 from opentree import OT
@@ -299,5 +301,70 @@ def synth_node_source_ages(node, cache_file_path=None):
     else:
             msg = "node {} not found in synthetic tree or taxonomy.".format(node)
             retdict = {'msg': msg, 'synth_response': synth_resp.response_dict}
-
     return retdict
+
+
+def write_fastdate_prior(subtree, dates, var_mult = 0.1, outputfile='node_prior.txt'):
+    mrca_dict = {}
+    for node in subtree:
+        lab = None
+        if node.label:
+            lab = str(node.label)
+            if lab in dates['node_ages']:
+                mrca_dict[lab] = {}
+                mrca_dict[lab]['ages'] = dates['node_ages'][lab]
+                nd = subtree.find_node_with_label(lab)
+                mrca_dict[lab]['tips'] = [ti.taxon.label.replace(' ','_') for ti in nd.leaf_iter()]
+    if len(mrca_dict) == 0:
+        sys.stderr.write("no calibrations")
+        return None
+    fi=open(outputfile,'w')
+    for dated_node in mrca_dict:
+        fi.write("'")
+        fi.write("','".join(mrca_dict[dated_node]['tips']))
+        fi.write("'")
+        fi.write(' ')
+        ages = [source['age'] for source in mrca_dict[dated_node]['ages']]
+        avgage = sum(ages)/len(ages)
+        if len(ages) > 1:
+            var = statistics.variance(ages)
+        else:
+            var = var_mult*avgage
+        fi.write('norm({},{},{})\n'.format(0, var, avgage))
+    fi.close()
+    return outputfile
+
+def write_fastdate_tree(subtreepath, br_len = 0.01, polytomy_br = 0.001, outputfile='fastdate_input.tre'):
+    subtree=dendropy.Tree.get_from_path(subtreepath, schema="newick")
+    subtree.resolve_polytomies(rng=random)    
+    subtree.suppress_unifurcations()
+    for edge in subtree.levelorder_edge_iter():
+        if (edge.tail_node is not None) and (edge.length is None):
+            edge.length = 0.01
+        if edge.length == 0:
+            edge.length = 0.001
+    subtree.write(path=outputfile, schema="newick")
+
+def date_synth_subtree(ott_id, reps, max_age=None, summary='sumtre.tre'):
+    dates = build_synth_node_source_ages()
+
+    if max_age:
+            max_age = max_age
+    elif 'ott'+ott_id in dates['node_ages']:
+        max_age = max([source['age'] for source in dates['node_ages']['ott'+ott_id]]) * 1.25
+    else:
+        sys.stderr.write("ERROR: no age estimate for root - please provide max root age using --max_age")
+        return None
+
+    output = OT.synth_subtree(ott_id=ott_id, label_format='id')
+    subtree = dendropy.Tree.get_from_string(output.response_dict['newick'], schema = 'newick')
+    subtree.write(path="unresolved.tre", schema="newick")
+
+    write_fastdate_prior(subtree, dates, var_mult = 0.1, outputfile='node_prior.txt')
+
+    for i in range(int(reps)):
+        write_fastdate_tree("unresolved.tre", br_len = 0.01, polytomy_br = 0.001, outputfile='fastdate_input{}.tre'.format(i))
+        os.system("fastdate --method_nodeprior --tree_file fastdate_input{}.tre --prior_file node_prior.txt --out_file node_prior{}.tre --max_age {} --bd_rho 1 --grid {}".format(i, i, max_age, max_age*2))
+
+    os.system("sumtrees.py --set-edges=mean-age --summarize-node-ages node_prior*.tre > {}".format(summary))
+

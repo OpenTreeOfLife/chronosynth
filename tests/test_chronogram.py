@@ -61,7 +61,8 @@ def test_synth_node_source_ages():
     # Bad node id
     resp3 = chronogram.synth_node_source_ages('mrcaott1000311ott364372913412341')
 
-    
-
-
-
+def test_fastdate_write():
+    # Hmmmmmm should ideally not require rebuild of whole dang thing...
+    ## how to test sha check...
+    # Normal synth node
+    pass
