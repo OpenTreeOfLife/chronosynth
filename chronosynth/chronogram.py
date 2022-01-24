@@ -10,12 +10,17 @@ import re
 import dendropy
 import random
 import configparser
+from sh import git
 
 from opentree import OT
 
 import logging
 
 import chronosynth
+
+from peyotl.phylesystem.git_actions import PhylesystemGitAction
+
+import peyotl
 
 config = configparser.ConfigParser()
 config.read(chronosynth.configfile)
@@ -239,21 +244,76 @@ def combine_ages_from_sources(source_ids, ultrametricity_precision=None, json_ou
         ofi.close()
     return(synth_node_ages)
 
-#This should probably go in peyotl....
-def get_phylesystem_sha(repo_url = "https://github.com/OpenTreeOfLife/phylesystem-1.git"):
-    process = subprocess.Popen(["git", "ls-remote", repo_url], stdout=subprocess.PIPE)
-    stdout, stderr = process.communicate()
-    sha = re.split(r'\t+', stdout.decode('ascii'))[0]
+
+def get_trees_from_nexson():
+
+def update_ages_from_sources(dates, source_ids, new_sha, ultrametricity_precision=None, json_out = None):
+    dates['synth_node_ages']['metadata']['phylesystem_sha'] = new_sha
+
+    for tag in source_ids:
+        for synth_node in dates['synth_node_ages']:
+            if tag in  dates['synth_node_ages'][synth_node]:
+                print(dates['synth_node_ages'][synth_node])
+        try:
+            res = map_conflict_ages(tag, ultrametricity_precision=ultrametricity_precision)
+        except ValueError:
+            time_unit = res['metadata']['time_unit']
+            log.info('{}, conflict error, {}\n'.format(tag, time_unit))
+            continue
+        if res==None:
+            log.info('{}, conflict empty\n'.format(tag))
+        else:
+            sys.stdout.write("study {} has {} supported nodes\n".format(tag, len(res["supported_nodes"])))
+            source_id = tag
+            # assert synth_node_ages['metadata']['synth_tree_about'] == res['metadata']['synth_tree_about']
+            time_unit = res['metadata']['time_unit']
+            if time_unit == 'Myr':
+                assert tag == "{}@{}".format(res['metadata']['study_id'],res['metadata']['tree_id'])
+                for synth_node in res['supported_nodes']:
+                    if synth_node not in synth_node_ages['node_ages']: #if not a record yet, we need to create one
+                        synth_node_ages['node_ages'][synth_node] = []
+                    age = res['supported_nodes'][synth_node]['age']
+                    source_node = res['supported_nodes'][synth_node]['node_label']
+                    entry = {'source_id': source_id, 'age':age, 'source_node':source_node}
+                    synth_node_ages['node_ages'][synth_node].append(entry)
+            else:
+                #skips all tree not in mya
+                pass
+    sf = json.dumps(synth_node_ages, sort_keys=True, indent=2, separators=(',', ': '), ensure_ascii=True)
+    if json_out is not None:
+        ofi = open(json_out,'w')
+        ofi.write(sf)
+        ofi.close()
+    return(synth_node_ages)
+
+
+
+
+#This should probably go in peyotl or somethings
+def get_phylesystem_sha(repo_url = "https://github.com/OpenTreeOfLife/phylesystem-1.git", repo_dir=None):
+    if repo_dir:
+        assert(os.path.exists(repo_dir))
+        sha = peyotl.git_storage.git_action.get_HEAD_SHA1('{}/.git'.format(repo_dir))
+    else:
+        process = subprocess.Popen(["git", "ls-remote", repo_url], stdout=subprocess.PIPE)
+        stdout, stderr = process.communicate()
+        sha = re.split(r'\t+', stdout.decode('ascii'))[0]
     return sha
 
 
-def build_synth_node_source_ages(cache_file_path=None, ultrametricity_precision=None):
+def pull_phylesystem(repo_dir, repo_url = "https://github.com/OpenTreeOfLife/phylesystem-1.git"):
+    assert(os.path.exists(repo_dir))
+    git_dir_arg = "--git-dir={}/.git".format(repo_dir)
+    git(git_dir_arg, 'pull', repo_url)
+
+
+def build_synth_node_source_ages(cache_file_path=None, remote=True, ultrametricity_precision=None, repo_dir=None):
     if cache_file_path == None:
         cache_file_path = config.get('paths', 'cache_file_path',
                                      fallback='/tmp/node_ages.json')
     if os.path.exists(cache_file_path):
         dates = json.load(open(cache_file_path))
-        current_sha = get_phylesystem_sha() 
+        current_sha = get_phylesystem_sha(repo_dir=repo_dir)
         # always remote?? 
         # find trees relies on otindex, which relies on github... so maybe remote is best even if a lil slo?
         cached_sha = dates['metadata'].get('phylesystem_sha')
@@ -261,10 +321,16 @@ def build_synth_node_source_ages(cache_file_path=None, ultrametricity_precision=
             sys.stdout.write("No new changes to phylesystem, using cached dates at {}\n".format(cache_file_path))
             return dates
         if cached_sha != current_sha:
-            sys.stdout.write("Phylesystem has changes since dates were cached, reloading and saving to {}\n".format(cache_file_path))
-            sources = find_trees()
-            dates = combine_ages_from_sources(sources, ultrametricity_precision=ultrametricity_precision, json_out = cache_file_path)
-            return dates
+            if repo_dir:
+                repo = PhylesystemGitAction(repo=repo_dir)
+                changed_studies = repo.get_changed_docs(cached_sha)
+
+
+            else:
+                sys.stdout.write("Phylesystem has changes since dates were cached, reloading and saving to {}\n".format(cache_file_path))
+                sources = find_trees()
+                dates = combine_ages_from_sources(sources, ultrametricity_precision=ultrametricity_precision, json_out = cache_file_path)
+                return dates
     else:
         sources = find_trees()
         dates = combine_ages_from_sources(sources, json_out = cache_file_path)
@@ -346,7 +412,7 @@ def write_fastdate_tree(subtreepath, br_len = 0.01, polytomy_br = 0.001, outputf
     subtree.write(path=outputfile, schema="newick")
 
 def date_synth_subtree(ott_id, reps, max_age=None, summary='sumtre.tre'):
-    dates = build_synth_node_source_ages()
+    dates = build_synth_node_source_ages(ultrametricity_precision=0.001)
 
     if max_age:
             max_age = max_age
