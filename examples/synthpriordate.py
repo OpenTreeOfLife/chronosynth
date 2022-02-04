@@ -20,10 +20,12 @@ def main(arg_list, out, list_for_results=None):
                         help='Output file name.')
     cli.parser.add_argument("--max_age", default=None, required=False,
                         help='max root age.')
+    cli.parser.add_argument("--phylo_only", default=False, action='store_true', required=False,
+                        help='prune to only tips with some phylogenetic information')
     cli.parser.add_argument("--verbose", action="store_true", help='include meta-data in response')
     OT, args = cli.parse_cli(arg_list)
 
-    chronogram.date_synth_subtree(args.node_id, args.reps, max_age=args.max_age, summary=args.output)
+    chronogram.date_synth_subtree(args.node_id, args.reps, max_age=args.max_age, summary=args.output, phylo_only=args.phylo_only)
 
 if __name__  == '__main__':
     rc = main(sys.argv[1:], sys.stdout)

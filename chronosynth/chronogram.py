@@ -84,6 +84,10 @@ def as_dendropy(source_id):
 def node_ages(source_id, ultrametricity_precision=None):
     """
     Get node ages for a DendroPy tree object.
+    Inputs
+    ------
+    source_id: in format study_id@tree_id
+    ultrametricity_precision: passed to dendropy
 
     Returns
     -------
@@ -200,9 +204,12 @@ def map_conflict_nodes(source_id):
 
 
 def combine_ages_from_sources(source_ids, ultrametricity_precision=None, json_out = None, fresh=False):
-    
     """
-    inputs: a list of source ids in format study_id@tree_id
+    inputs: 
+    source_ids = a list of source ids in format study_id@tree_id
+    ultrametricity_precision = a float passed to dendropy
+    json_out = output file
+    fresh = if False will re-use cached estimates. If True will re-map all studies.
 
     Outputs: a dictionary
     Key: node_id (or ott id) in synth tree
@@ -280,12 +287,24 @@ def pull_phylesystem(repo_dir, repo_url = "https://github.com/OpenTreeOfLife/phy
     git(git_dir_arg, 'pull', repo_url)
 
 
-def build_synth_node_source_ages(cache_file_path=None, remote=True, ultrametricity_precision=None, repo_dir=None):
+def build_synth_node_source_ages(cache_file_path=None, ultrametricity_precision=None, repo_dir=None, fresh=False):
+    """
+    This combines all of the input node ages mapped using "map conflict ages".
+    Returns a dictionary, and caches the dict in 
+    Args:
+    cache_file_path (str): Json output. can be given as arg or 
+                            Defaults to node_ages.json, dir set in config, 
+                            or defaults /tmp/node_ages.json
+    ultrametricity_precision: a float passed to dendropy
+    repo_dir: a local clone of phylesystem. Defaults to None, and uses remote
+    fresh: Whether to re-map trees to synth and est ages
+    """
     if cache_file_path==None:
         cache_file_dir = config.get('paths', 'cache_file_dir',  
                                     fallback='/tmp/')
         cache_file_path = cache_file_dir + '/node_ages.json'
-    if os.path.exists(cache_file_path):
+    sources = find_trees()
+    if os.path.exists(cache_file_path) and fresh == False:
         dates = json.load(open(cache_file_path))
         current_sha = get_phylesystem_sha(repo_dir=repo_dir)
         # always remote?? 
@@ -298,19 +317,31 @@ def build_synth_node_source_ages(cache_file_path=None, remote=True, ultrametrici
             if repo_dir:
                 repo = PhylesystemGitAction(repo=repo_dir)
                 changed_studies = repo.get_changed_docs(cached_sha)
+                sys.stdout.write("Mapping changed studies")
+                ## Re-est conflict and BL's for changed studies
+                changed_trees = [for source in sources if source.split('@') in changed_studies]
+                map_conflict_ages(source_id, 
+                                  ultrametricity_precision=ultrametricity_precision,
+                                  repo_dir=repo_dir,
+                                  fresh=True)
             else:
                 sys.stdout.write("Phylesystem has changes since dates were cached, reloading and saving to {}\n".format(cache_file_path))
-                sources = find_trees()
-                dates = combine_ages_from_sources(sources, ultrametricity_precision=ultrametricity_precision, json_out = cache_file_path)
-                return dates
     else:
-        sys.stdout.write("No date cache found. Loading and saving to {}\n".format(cache_file_path))
-        sources = find_trees()
-        dates = combine_ages_from_sources(sources, ultrametricity_precision=ultrametricity_precision, json_out = cache_file_path)
+        sys.stdout.write("No date cache found. Loading dates and saving to {}\n".format(cache_file_path))
+    dates = combine_ages_from_sources(sources, 
+                                      ultrametricity_precision=ultrametricity_precision,
+                                      json_out = cache_file_path,
+                                      fresh=fresh)
     return dates
 
 
 def synth_node_source_ages(node, cache_file_path=None):
+    """
+    Return age estimates for a node.
+    Arguemnts:
+    node: Opentree node id
+    cache_file_path: path to a stored json with dates. default None.
+    """
     if cache_file_path == None:
         cache_file_path = config.get('Paths', 'cache_file_path',
                                      fallback='/tmp/node_ages.json')
@@ -346,6 +377,17 @@ def synth_node_source_ages(node, cache_file_path=None):
 
 
 def write_fastdate_prior(subtree, dates, var_mult = 0.1, outputfile='node_prior.txt'):
+    """
+    Writes out a node prior file for fatsdate input, with normal prior on each  node with any dates.
+    Where multiple dates exist, variance for normal is estimated from dates.
+    Where only one date, variance is date * var_mult.
+
+    Inputs:
+    subtree: dendropy tree object labeled with ottids and synth node ids
+    dates: dictionary output by synth_node_ages()
+    var_mult: Hacky approach to choosing a variance
+    outputfile: defaults to node_prior.txt
+    """
     mrca_dict = {}
     for node in subtree:
         lab = None
@@ -357,7 +399,7 @@ def write_fastdate_prior(subtree, dates, var_mult = 0.1, outputfile='node_prior.
                 nd = subtree.find_node_with_label(lab)
                 mrca_dict[lab]['tips'] = [ti.taxon.label.replace(' ','_') for ti in nd.leaf_iter()]
     if len(mrca_dict) == 0:
-        sys.stderr.write("no calibrations")
+        sys.stderr.write("no calibrations\n")
         return None
     fi=open(outputfile,'w')
     for dated_node in mrca_dict:
@@ -376,6 +418,17 @@ def write_fastdate_prior(subtree, dates, var_mult = 0.1, outputfile='node_prior.
     return outputfile
 
 def write_fastdate_tree(subtreepath, br_len = 0.01, polytomy_br = 0.001, outputfile='fastdate_input.tre'):
+    """Takes a subtree from OpenTree synth, with id formatted labels,
+    and resolves polytomies and applies arbitrarty branch lengths.
+    Uses random to randomies polytomy resolution each time.
+
+    Inputs:
+    subtreepath: path to newick tree file
+    br_len: branch length to assign to branches
+    polytomy_br: branch length to assign to arbitrarily resolved polytomies
+    outputfile: default fastdate_input.tre
+
+    """
     subtree=dendropy.Tree.get_from_path(subtreepath, schema="newick")
     subtree.resolve_polytomies(rng=random)    
     subtree.suppress_unifurcations()
@@ -386,7 +439,47 @@ def write_fastdate_tree(subtreepath, br_len = 0.01, polytomy_br = 0.001, outputf
             edge.length = 0.001
     subtree.write(path=outputfile, schema="newick")
 
-def date_synth_subtree(node_id, reps, max_age=None, summary='sumtre.tre'):
+
+def prune_to_phylo_only(tree, grafted_solution="/home/ejmctavish/projects/otapi/opentree13.4_tree/grafted_solution/grafted_solution.tre"):
+    """
+    Prune tree to only taxa with some phylogenetic information in OpenTree
+    Inputs:
+    tree: dendropy formatted tree
+    grafted solution: path to current synth grafted solution TODO current default hardcoded hack
+    https://files.opentreeoflife.org/synthesis/opentree13.4/output/grafted_solution/grafted_solution.tre
+    """
+    fi = open(grafted_solution).readlines()
+    for lin in fi:
+        lin = lin.replace('(',',')
+        lin = lin.replace(')',',')
+        lii = lin.split(',')
+    synth_ottids = set(lii)
+    taxa_to_retain = []
+    for leaf in tree.leaf_nodes():
+        tax = leaf.taxon
+        if tax:
+            ottid = tax.label
+        else:
+            ottid = None
+        if ottid in synth_ottids:
+            taxa_to_retain.append(tax)
+    tree.retain_taxa(taxa_to_retain)
+    return(tree)
+
+
+
+
+def date_synth_subtree(node_id, reps, max_age=None, summary='sumtre.tre', phylo_only=False):
+    """
+    Takes a synth subtree subtenting from node_id and assigns dates using fastdate.
+    Inputs
+    ------
+    node_id: Opentree synth node id
+    reps: how many runs to do (polytomies are arbitrarily resolved on each run)
+    max_age: maximum age for root node. Default None - will be estimated from data if avail, but is required input if no data
+    phylo_only: Prune to only synth tips with phylogenetic information (default False)
+    summary: Output. deafult sumtre.tre
+    """
     dates = build_synth_node_source_ages(ultrametricity_precision=0.01)
     if max_age:
             max_age = max_age
@@ -398,13 +491,17 @@ def date_synth_subtree(node_id, reps, max_age=None, summary='sumtre.tre'):
 
     output = OT.synth_subtree(node_id=node_id, label_format='id')
     subtree = dendropy.Tree.get_from_string(output.response_dict['newick'], schema = 'newick')
+    sys.stdout.write("{} leaves in tree\n".format(len(subtree)))
+    if phylo_only:
+        subtree = prune_to_phylo_only(subtree)
+        sys.stdout.write("{} phylo informed leaves in tree\n".format(len(subtree)))
     subtree.write(path="unresolved.tre", schema="newick")
 
-    write_fastdate_prior(subtree, dates, var_mult = 0.1, outputfile='node_prior.txt')
+    pr = write_fastdate_prior(subtree, dates, var_mult = 0.1, outputfile='node_prior.txt')
+    if pr:
+        for i in range(int(reps)):
+            write_fastdate_tree("unresolved.tre", br_len = 0.01, polytomy_br = 0.001, outputfile='fastdate_input{}.tre'.format(i))
+            os.system("fastdate --method_nodeprior --tree_file fastdate_input{}.tre --prior_file node_prior.txt --out_file node_prior{}.tre --max_age {} --bd_rho 1 --grid {} > fastdate.out".format(i, i, max_age, max_age*2))
 
-    for i in range(int(reps)):
-        write_fastdate_tree("unresolved.tre", br_len = 0.01, polytomy_br = 0.001, outputfile='fastdate_input{}.tre'.format(i))
-        os.system("fastdate --method_nodeprior --tree_file fastdate_input{}.tre --prior_file node_prior.txt --out_file node_prior{}.tre --max_age {} --bd_rho 1 --grid {}".format(i, i, max_age, max_age*2))
-
-    os.system("sumtrees.py --set-edges=mean-age --summarize-node-ages node_prior*.tre > {}".format(summary))
+        os.system("sumtrees.py --set-edges=mean-age --summarize-node-ages node_prior*.tre > {}".format(summary))
 
