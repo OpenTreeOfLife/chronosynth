@@ -40,7 +40,7 @@ def test_conf_map_all():
     resp = chronogram.combine_ages_from_sources(sources)
     assert list(resp.keys()) == ['metadata','node_ages']
     assert len(resp['node_ages']['mrcaott129303ott149204']) == 2
-    assert list(resp['node_ages']['mrcaott129303ott149204'][0].keys()) == ['source_id', 'age_mya', 'source_node']
+    assert list(resp['node_ages']['mrcaott129303ott149204'][0].keys()) == ['source_id', 'age', 'source_node']
 
 def test_get_phylesystem_sha():
     sha = chronogram.get_phylesystem_sha()
@@ -61,7 +61,8 @@ def test_synth_node_source_ages():
     # Bad node id
     resp3 = chronogram.synth_node_source_ages('mrcaott1000311ott364372913412341')
 
-    
-
-
-
+def test_fastdate_write():
+    # Hmmmmmm should ideally not require rebuild of whole dang thing...
+    ## how to test sha check...
+    # Normal synth node
+    pass
