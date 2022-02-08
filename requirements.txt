@@ -1,5 +1,7 @@
 
 -e git+https://github.com/OpenTreeOfLife/python-opentree@main#egg=opentree
+-e git+https://github.com/OpenTreeOfLife/peyotl@master#egg=peyotl
 pytest
+sh
 configparser
 sphinxcontrib-napoleon

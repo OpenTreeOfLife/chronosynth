@@ -460,8 +460,7 @@ def write_fastdate_tree(subtreepath,
     subtree.write(path=outputfile, schema="newick")
 
 
-def prune_to_phylo_only(tree,
-                        grafted_solution="/home/ejmctavish/projects/otapi/opentree13.4_tree/grafted_solution/grafted_solution.tre"):
+def prune_to_phylo_only(tree, cache_file_dir=None):
     """
     Prune tree to only taxa with some phylogenetic information in OpenTree
     Inputs:
@@ -469,6 +468,12 @@ def prune_to_phylo_only(tree,
     grafted solution: path to current synth grafted solution TODO current default hardcoded hack
     https://files.opentreeoflife.org/synthesis/opentree13.4/output/grafted_solution/grafted_solution.tre
     """
+    if cache_file_dir is None:
+        cache_file_dir = config.get('paths', 'cache_file_dir',
+                                    fallback='/tmp/')
+    grafted_solution = cache_file_dir + '/grafted_solution.tre'
+    if not os.path.exists(grafted_solution):
+        os.system("wget https://files.opentreeoflife.org/synthesis/opentree13.4/output/grafted_solution/grafted_solution.tre -P {}".format(cache_file_dir))
     fi = open(grafted_solution).readlines()
     for lin in fi:
         lin = lin.replace('(', ',')
