@@ -514,6 +514,8 @@ def date_synth_subtree(node_id,
         max_age_est = max_age
     elif node_id in dates['node_ages']:
         max_age_est = max([source['age'] for source in dates['node_ages'][node_id]]) * 1.25
+        sys.stdout.write("Age estimate for root from data: {}".format(max_age_est))
+
     else:
         sys.stderr.write("ERROR: no age estimate for root - please provide max root age using --max_age")
         return None
@@ -533,7 +535,7 @@ def date_synth_subtree(node_id,
             os.system("fastdate --method_nodeprior --tree_file fastdate_input{}.tre --prior_file node_prior.txt --out_file node_prior{}.tre --max_age {} --bd_rho 1 --grid {} > fastdate.out".format(i,
                                                                                                                                                                                                      i,
                                                                                                                                                                                                      max_age_est,
-                                                                                                                                                                                                     max_age_est*2))
+                                                                                                                                                                                                     max_age_est*3))
 
         os.system("sumtrees.py --set-edges=mean-age --summarize-node-ages node_prior*.tre > {}".format(summary))
         return summary
