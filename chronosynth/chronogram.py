@@ -321,7 +321,6 @@ def build_synth_node_source_ages(cache_file_path=None, ultrametricity_precision=
         cache_file_dir = config.get('paths', 'cache_file_dir',
                                     fallback='/tmp/')
         cache_file_path = cache_file_dir + '/node_ages.json'
-    sources = find_trees()
     if os.path.exists(cache_file_path) and fresh == False:
         dates = json.load(open(cache_file_path))
         current_sha = get_phylesystem_sha(repo_dir=repo_dir)
@@ -345,6 +344,7 @@ def build_synth_node_source_ages(cache_file_path=None, ultrametricity_precision=
                 sys.stdout.write("Phylesystem has changed since dates were cached, reloading and saving to {}\n".format(cache_file_path))
     else:
         sys.stdout.write("No date cache found. Loading dates and saving to {}\n".format(cache_file_path))
+    sources = find_trees()
     dates = combine_ages_from_sources(sources,
                                       ultrametricity_precision=ultrametricity_precision,
                                       json_out=cache_file_path,
