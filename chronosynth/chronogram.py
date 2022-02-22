@@ -494,50 +494,74 @@ def prune_to_phylo_only(tree, cache_file_dir=None):
 
 
 
-def date_synth_subtree(node_id,
-                       reps,
+def date_synth_subtree(node_id=None,
+                       node_ids=None,
+                       reps = 5,
                        max_age=None,
+                       output_dir='Chrono_out',
                        summary='sumtre.tre',
-                       phylo_only=False):
+                       phylo_only=False,
+                       grid=300):
     """
     Takes a synth subtree subtenting from node_id and assigns dates using fastdate.
     Inputs
     ------
-    node_id: Opentree synth node id
+    node_id: Opentree synth node id  for root OR
+    node_ids: list of ott_ids or node_ids to include
     reps: how many runs to do (polytomies are arbitrarily resolved on each run)
     max_age: maximum age for root node. Default None - will be estimated from data if avail, but is required input if no data
     phylo_only: Prune to only synth tips with phylogenetic information (default False)
     summary: Output. deafult sumtre.tre
     """
     dates = build_synth_node_source_ages(ultrametricity_precision=0.01)
+    assert node_id or node_ids
+    if node_ids:
+        assert isinstance(node_ids, list)
+        print(node_ids)
+        root_node = OT.synth_mrca(node_ids=node_ids).response_dict['mrca']['node_id']
+        print(root_node)
+    else:
+        root_node = node_id
+
     if max_age:
         max_age_est = max_age
-    elif node_id in dates['node_ages']:
+    elif root_node in dates['node_ages']:
         max_age_est = max([source['age'] for source in dates['node_ages'][node_id]]) * 1.25
-        sys.stdout.write("Age estimate for root from data: {}".format(max_age_est))
-
+        sys.stdout.write("Age estimate for root from data: {}\n".format(max_age_est))
     else:
         sys.stderr.write("ERROR: no age estimate for root - please provide max root age using --max_age")
         return None
+    sys.stdout.write("Root node is {}\n".format(root_node))
 
-    output = OT.synth_subtree(node_id=node_id, label_format='id')
+    if node_id:
+        output = OT.synth_subtree(node_id=root_node, label_format='id')
+    if node_ids:
+        output = OT.synth_induced_tree(node_ids=node_ids, label_format='id')
+
+    ### ERRORR If tree to large
+
     subtree = dendropy.Tree.get_from_string(output.response_dict['newick'], schema='newick')
     sys.stdout.write("{} leaves in tree\n".format(len(subtree)))
     if phylo_only:
         subtree = prune_to_phylo_only(subtree)
         sys.stdout.write("{} phylo informed leaves in tree\n".format(len(subtree)))
-    subtree.write(path="unresolved.tre", schema="newick")
-
-    pr = write_fastdate_prior(subtree, dates, var_mult=0.1, outputfile='node_prior.txt')
+    if not os.path.exists(output_dir):
+        os.mkdir(output_dir)
+    subtree.write(path="{}/unresolved.tre".format(output_dir), schema="newick")
+    priorfile = '{}/node_prior.txt'.format(output_dir)
+    pr = write_fastdate_prior(subtree, dates, var_mult=0.1, outputfile=priorfile)
     if pr:
         for i in range(int(reps)):
-            write_fastdate_tree("unresolved.tre", br_len=0.01, polytomy_br=0.001, outputfile='fastdate_input{}.tre'.format(i))
-            os.system("fastdate --method_nodeprior --tree_file fastdate_input{}.tre --prior_file node_prior.txt --out_file node_prior{}.tre --max_age {} --bd_rho 1 --grid {} > fastdate.out".format(i,
-                                                                                                                                                                                                     i,
-                                                                                                                                                                                                     max_age_est,
-                                                                                                                                                                                                     max_age_est*3))
-
-        os.system("sumtrees.py --set-edges=mean-age --summarize-node-ages node_prior*.tre > {}".format(summary))
+            treefile = '{}/fastdate_input{}.tre'.format(output_dir, i)
+            outfile = '{}/fastdate_out{}.tre'.format(output_dir, i)            
+            write_fastdate_tree("{}/unresolved.tre".format(output_dir), br_len=0.01, polytomy_br=0.001, outputfile=treefile)
+            os.system("fastdate --method_nodeprior --tree_file {tf} --prior_file {pf} --out_file {of} --max_age {ma} --bd_rho 1 --grid {gs} > fastdate.out".format(tf=treefile,
+                                                                                                                                                                  pf=priorfile,
+                                                                                                                                                                  of=outfile,
+                                                                                                                                                                  ma=max_age_est,
+                                                                                                                                                                  gs=grid))
+        os.system("sumtrees.py --set-edges=mean-age --summarize-node-ages {od}/fastdate_out*.tre > {od}/{sf}".format(od=output_dir,
+                                                                                                                     sf=summary)) #TODO haaaaaaaacccckk
         return summary
     return None
 
