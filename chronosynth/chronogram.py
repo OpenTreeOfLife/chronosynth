@@ -430,6 +430,8 @@ def write_fastdate_prior(subtree, dates, var_mult=0.1, outputfile='node_prior.tx
             var = statistics.variance(ages)
         else:
             var = var_mult*avgage
+        if var < 0.001:
+            var = 0.001 #ToDO haaaaaack
         fi.write('norm({},{},{})\n'.format(0, var, avgage))
     fi.close()
     return outputfile
@@ -517,9 +519,8 @@ def date_synth_subtree(node_id=None,
     assert node_id or node_ids
     if node_ids:
         assert isinstance(node_ids, list)
-        print(node_ids)
         root_node = OT.synth_mrca(node_ids=node_ids).response_dict['mrca']['node_id']
-        print(root_node)
+        sys.stdout.write("Root node is: {}".format(root_node))
     else:
         root_node = node_id
 
@@ -549,17 +550,17 @@ def date_synth_subtree(node_id=None,
         os.mkdir(output_dir)
     subtree.write(path="{}/unresolved.tre".format(output_dir), schema="newick")
     priorfile = '{}/node_prior.txt'.format(output_dir)
-    pr = write_fastdate_prior(subtree, dates, var_mult=0.1, outputfile=priorfile)
+    pr = write_fastdate_prior(subtree, dates, var_mult=1, outputfile=priorfile)
     if pr:
         for i in range(int(reps)):
             treefile = '{}/fastdate_input{}.tre'.format(output_dir, i)
             outfile = '{}/fastdate_out{}.tre'.format(output_dir, i)            
             write_fastdate_tree("{}/unresolved.tre".format(output_dir), br_len=0.01, polytomy_br=0.001, outputfile=treefile)
             os.system("fastdate --method_nodeprior --tree_file {tf} --prior_file {pf} --out_file {of} --max_age {ma} --bd_rho 1 --grid {gs} > fastdate.out".format(tf=treefile,
-                                                                                                                                                                  pf=priorfile,
-                                                                                                                                                                  of=outfile,
-                                                                                                                                                                  ma=max_age_est,
-                                                                                                                                                                  gs=grid))
+                                                                                                                                                                   pf=priorfile,
+                                                                                                                                                                   of=outfile,
+                                                                                                                                                                   ma=max_age_est,
+                                                                                                                                                                   gs=grid))
         os.system("sumtrees.py --set-edges=mean-age --summarize-node-ages {od}/fastdate_out*.tre > {od}/{sf}".format(od=output_dir,
                                                                                                                      sf=summary)) #TODO haaaaaaaacccckk
         return summary
