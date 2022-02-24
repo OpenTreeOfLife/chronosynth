@@ -19,6 +19,8 @@ def main(arg_list, out, list_for_results=None):
                         help='The ott_ids or node ids of desired tips in the tree, as first or only column in a file, with header "ott_ids"')
     cli.parser.add_argument("--reps", default=10, required=False,
                         help='How many times to randomly resolve polytomies.')
+    cli.parser.add_argument("--grid", default=100, required=False,
+                            help='How many grid lines.')
     cli.parser.add_argument("--output_dir", default='chrono_out', required=False,
                         help='Output file name.')
     cli.parser.add_argument("--max_age", default=None, required=False,
@@ -47,7 +49,7 @@ def main(arg_list, out, list_for_results=None):
                 ott_ids.add('ott'+lii[0])
         ott_ids = list(ott_ids)    
 #        print(OT.synth_mrca(node_ids=ott_ids).response_dict['mrca']['node_id'])
-        chronogram.date_synth_subtree(node_ids=ott_ids,reps=args.reps, max_age=args.max_age, output_dir=args.output_dir, phylo_only=args.phylo_only, grid=1000)
+        chronogram.date_synth_subtree(node_ids=ott_ids,reps=args.reps, max_age=args.max_age, output_dir=args.output_dir, phylo_only=args.phylo_only, grid=args.grid)
 
     else:
         sys.stderr("-node_id OR --node_ids OR -node_ids_file are required as an argument")

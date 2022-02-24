@@ -556,11 +556,13 @@ def date_synth_subtree(node_id=None,
             treefile = '{}/fastdate_input{}.tre'.format(output_dir, i)
             outfile = '{}/fastdate_out{}.tre'.format(output_dir, i)            
             write_fastdate_tree("{}/unresolved.tre".format(output_dir), br_len=0.01, polytomy_br=0.001, outputfile=treefile)
-            os.system("fastdate --method_nodeprior --tree_file {tf} --prior_file {pf} --out_file {of} --max_age {ma} --bd_rho 1 --grid {gs} > fastdate.out".format(tf=treefile,
+            fd_cmd = "fastdate --method_nodeprior --tree_file {tf} --prior_file {pf} --out_file {of} --out_form ultrametric --max_age {ma} --bd_rho 1 --grid {gs} > fastdate.out".format(tf=treefile,
                                                                                                                                                                    pf=priorfile,
                                                                                                                                                                    of=outfile,
                                                                                                                                                                    ma=max_age_est,
-                                                                                                                                                                   gs=grid))
+                                                                                                                                                                   gs=grid)
+            print(fd_cmd)
+            os.system(fd_cmd)
         os.system("sumtrees.py --set-edges=mean-age --summarize-node-ages {od}/fastdate_out*.tre > {od}/{sf}".format(od=output_dir,
                                                                                                                      sf=summary)) #TODO haaaaaaaacccckk
         return summary
