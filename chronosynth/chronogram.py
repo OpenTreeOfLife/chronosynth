@@ -498,14 +498,15 @@ def prune_to_phylo_only(tree, cache_file_dir=None):
 
 def date_synth_subtree(node_id=None,
                        node_ids=None,
-                       reps = 5,
                        max_age=None,
+                       method = 'fastdate',
                        output_dir='Chrono_out',
                        summary='sumtre.tre',
                        phylo_only=False,
+                       reps = 5,
                        grid=300):
     """
-    Takes a synth subtree subtenting from node_id and assigns dates using fastdate.
+    Takes a synth subtree subtending from node_id and assigns dates using fastdate.
     Inputs
     ------
     node_id: Opentree synth node id  for root OR
@@ -516,11 +517,11 @@ def date_synth_subtree(node_id=None,
     summary: Output. deafult sumtre.tre
     """
     dates = build_synth_node_source_ages(ultrametricity_precision=0.01)
+    assert method in ['fastdate','bladj']
     assert node_id or node_ids
     if node_ids:
         assert isinstance(node_ids, list)
         root_node = OT.synth_mrca(node_ids=node_ids).response_dict['mrca']['node_id']
-        sys.stdout.write("Root node is: {}".format(root_node))
     else:
         root_node = node_id
 
@@ -530,9 +531,9 @@ def date_synth_subtree(node_id=None,
         max_age_est = max([source['age'] for source in dates['node_ages'][node_id]]) * 1.25
         sys.stdout.write("Age estimate for root from data: {}\n".format(max_age_est))
     else:
-        sys.stderr.write("ERROR: no age estimate for root - please provide max root age using --max_age")
+        sys.stderr.write("ERROR: no age estimate for root - please provide max root age using --max_age\n")
         return None
-    sys.stdout.write("Root node is {}\n".format(root_node))
+    sys.stdout.write("Root node is {}, age estimate is  {}\n".format(root_node, max_age_est))
 
     if node_id:
         output = OT.synth_subtree(node_id=root_node, label_format='id')
@@ -548,23 +549,58 @@ def date_synth_subtree(node_id=None,
         sys.stdout.write("{} phylo informed leaves in tree\n".format(len(subtree)))
     if not os.path.exists(output_dir):
         os.mkdir(output_dir)
-    subtree.write(path="{}/unresolved.tre".format(output_dir), schema="newick")
-    priorfile = '{}/node_prior.txt'.format(output_dir)
-    pr = write_fastdate_prior(subtree, dates, var_mult=1, outputfile=priorfile)
-    if pr:
-        for i in range(int(reps)):
-            treefile = '{}/fastdate_input{}.tre'.format(output_dir, i)
-            outfile = '{}/fastdate_out{}.tre'.format(output_dir, i)            
-            write_fastdate_tree("{}/unresolved.tre".format(output_dir), br_len=0.01, polytomy_br=0.001, outputfile=treefile)
-            fd_cmd = "fastdate --method_nodeprior --tree_file {tf} --prior_file {pf} --out_file {of} --out_form ultrametric --max_age {ma} --bd_rho 1 --grid {gs} > fastdate.out".format(tf=treefile,
-                                                                                                                                                                   pf=priorfile,
-                                                                                                                                                                   of=outfile,
-                                                                                                                                                                   ma=max_age_est,
-                                                                                                                                                                   gs=grid)
-            print(fd_cmd)
-            os.system(fd_cmd)
-        os.system("sumtrees.py --set-edges=mean-age --summarize-node-ages {od}/fastdate_out*.tre > {od}/{sf}".format(od=output_dir,
-                                                                                                                     sf=summary)) #TODO haaaaaaaacccckk
-        return summary
+    undated_treefile = "{}/unresolved.tre".format(output_dir)
+    subtree.write(path= undated_treefile, schema="newick")
+    if method == 'fastdate':
+        priorfile = '{}/node_prior.txt'.format(output_dir)
+        pr = write_fastdate_prior(subtree, dates, var_mult=1, outputfile=priorfile)
+        if pr:
+            for i in range(int(reps)):
+                treefile = '{}/fastdate_input{}.tre'.format(output_dir, i)
+                outfile = '{}/fastdate_out{}.tre'.format(output_dir, i)            
+                write_fastdate_tree(undated_treefile, br_len=0.01, polytomy_br=0.001, outputfile=treefile)
+                fd_cmd = "fastdate --method_nodeprior --tree_file {tf} --prior_file {pf} --out_file {of} --out_form ultrametric --max_age {ma} --bd_rho 1 --grid {gs} > fastdate.out".format(tf=treefile,
+                                                                                                                                                                       pf=priorfile,
+                                                                                                                                                                       of=outfile,
+                                                                                                                                                                       ma=max_age_est,
+                                                                                                                                                                       gs=grid)
+                print(fd_cmd)
+                os.system(fd_cmd)
+            os.system("sumtrees.py --set-edges=mean-age --summarize-node-ages {od}/fastdate_out*.tre > {od}/{sf}".format(od=output_dir,
+                                                                                                                         sf=summary)) #TODO haaaaaaaacccckk
+            return summary
+    if method == 'bladj':
+        write_bladj_ages(subtree, dates, root_node, root_age=max_age_est, output_dir=output_dir)
+        curr_dir = os.getcwd()
+        os.chdir(output_dir)
+        os.system("phylocom bladj -f  ../{} > bladj_dates.tre".format(undated_treefile))
+        os.chdir(curr_dir)
     return None
 
+
+def write_bladj_ages(subtree, dates, root_node, root_age, output_dir='.'):
+    """
+    Writes out an ages file 
+    """
+    outputfile = "{}/ages".format(output_dir)
+    ages = open(outputfile,'w')
+    dated_nodes = set()
+    undated_nodes = set()
+    for node in subtree:
+        lab = None
+        if node.label:
+            if node.label.startswith('mrca'):
+                lab = node.label
+            elif node.label.startswith('ott'):
+                lab = node.label
+            if lab in dates['node_ages']:
+                dated_nodes.add(lab)
+                age_range = [float(source['age']) for source in dates['node_ages'][lab]]
+                age_range.sort()
+                age_est = sum(age_range) / len(age_range) 
+                ages.write("{}\t{}\n".format(node.label, age_est))
+            else:
+                undated_nodes.add(lab)
+    ages.write("{}\t{}\n".format(root_node, root_age))
+    ages.close()
+    return outputfile

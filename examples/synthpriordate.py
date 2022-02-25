@@ -8,6 +8,12 @@ from chronosynth import chronogram
 
 from opentree import OT, OTCommandLineTool
 
+"""
+e.g. python examples/synthpriordate.py --node_ids_file ../GBIF-Biodiverse-OpenTree/data/gymnosperms.csv --output_dir gymno_fastdate --method fastdate --reps 10 --grid 1000  --max_age 385 --phylo_only
+
+
+"""
+
 
 def main(arg_list, out, list_for_results=None):
     cli = OTCommandLineTool(usage='date a synth tree')
@@ -27,14 +33,26 @@ def main(arg_list, out, list_for_results=None):
                         help='max root age.')
     cli.parser.add_argument("--phylo_only", default=False, action='store_true', required=False,
                         help='prune to only tips with some phylogenetic information')
+    cli.parser.add_argument("--method", default='fastdate', required=False,
+                        help="methdo to date tree. Currnetly 'fastdate' or 'bladj")
     cli.parser.add_argument("--verbose", action="store_true", help='include meta-data in response')
     OT, args = cli.parse_cli(arg_list)
 
 
     if args.node_id:
-        chronogram.date_synth_subtree(node_id=args.node_id, reps=args.reps, max_age=args.max_age, output_dir=args.output_dir, phylo_only=args.phylo_only)
+        chronogram.date_synth_subtree(node_id=args.node_id,
+                                      reps=args.reps,
+                                      max_age=args.max_age,
+                                      output_dir=args.output_dir,
+                                      phylo_only=args.phylo_only,
+                                      method=args.method)
     elif args.node_ids:
-        chronogram.date_synth_subtree(node_ids=args.node_ids,reps=args.reps, max_age=args.max_age, output_dir=args.output_dir, phylo_only=args.phylo_only)
+        chronogram.date_synth_subtree(node_ids=args.node_ids,
+                                      reps=args.reps,
+                                      max_age=args.max_age,
+                                      output_dir=args.output_dir,
+                                      phylo_only=args.phylo_only,
+                                      method=args.method)
     elif args.node_ids_file:
         assert os.path.exists(args.node_ids_file)
         queryfile = open(args.node_ids_file)
@@ -49,7 +67,13 @@ def main(arg_list, out, list_for_results=None):
                 ott_ids.add('ott'+lii[0])
         ott_ids = list(ott_ids)    
 #        print(OT.synth_mrca(node_ids=ott_ids).response_dict['mrca']['node_id'])
-        chronogram.date_synth_subtree(node_ids=ott_ids,reps=args.reps, max_age=args.max_age, output_dir=args.output_dir, phylo_only=args.phylo_only, grid=args.grid)
+        chronogram.date_synth_subtree(node_ids=ott_ids,
+                                      reps=args.reps,
+                                      max_age=args.max_age,
+                                      output_dir=args.output_dir,
+                                      phylo_only=args.phylo_only,
+                                      grid=args.grid,
+                                      method=args.method)
 
     else:
         sys.stderr("-node_id OR --node_ids OR -node_ids_file are required as an argument")
