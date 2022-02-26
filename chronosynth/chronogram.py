@@ -1,5 +1,6 @@
-"""Functions for working with chronograms from Phylesystem"""
 #!/usr/bin/env python3
+"""Functions for working with chronograms from Phylesystem"""
+
 import sys
 import os
 import datetime
@@ -528,7 +529,7 @@ def date_synth_subtree(node_id=None,
     if max_age:
         max_age_est = max_age
     elif root_node in dates['node_ages']:
-        max_age_est = max([source['age'] for source in dates['node_ages'][node_id]]) * 1.25
+        max_age_est = max([source['age'] for source in dates['node_ages'][root_node]]) * 1.25
         sys.stdout.write("Age estimate for root from data: {}\n".format(max_age_est))
     else:
         sys.stderr.write("ERROR: no age estimate for root - please provide max root age using --max_age\n")
@@ -539,44 +540,83 @@ def date_synth_subtree(node_id=None,
         output = OT.synth_subtree(node_id=root_node, label_format='id')
     if node_ids:
         output = OT.synth_induced_tree(node_ids=node_ids, label_format='id')
-
-    ### ERRORR If tree to large
-
     subtree = dendropy.Tree.get_from_string(output.response_dict['newick'], schema='newick')
+    date_tree(subtree=subtree,
+              dates=dates,
+              root_node=root_node,
+              max_age_est=max_age_est,
+              method=method,
+              output_dir=output_dir,
+              summary=summary,
+              phylo_only=phylo_only,
+              reps=reps,
+              grid=grid)
+
+
+def date_tree(subtree,
+              dates,
+              root_node,
+              max_age_est,
+              method,
+              output_dir,
+              summary,
+              phylo_only,
+              reps,
+              grid):
     sys.stdout.write("{} leaves in tree\n".format(len(subtree)))
     if phylo_only:
         subtree = prune_to_phylo_only(subtree)
         sys.stdout.write("{} phylo informed leaves in tree\n".format(len(subtree)))
+    if method == 'fastdate':
+        run_fastdate(subtree, dates, max_age_est, output_dir, summary, reps, grid)
+    if method == 'bladj':
+       run_bladj(subtree, dates, root_node, max_age_est, output_dir, summary)
+    return None
+
+def run_fastdate(subtree,
+                 dates,
+                 max_age_est,
+                 output_dir,
+                 summary,
+                 reps,
+                 grid):
     if not os.path.exists(output_dir):
         os.mkdir(output_dir)
     undated_treefile = "{}/unresolved.tre".format(output_dir)
     subtree.write(path= undated_treefile, schema="newick")
-    if method == 'fastdate':
-        priorfile = '{}/node_prior.txt'.format(output_dir)
-        pr = write_fastdate_prior(subtree, dates, var_mult=1, outputfile=priorfile)
-        if pr:
-            for i in range(int(reps)):
-                treefile = '{}/fastdate_input{}.tre'.format(output_dir, i)
-                outfile = '{}/fastdate_out{}.tre'.format(output_dir, i)            
-                write_fastdate_tree(undated_treefile, br_len=0.01, polytomy_br=0.001, outputfile=treefile)
-                fd_cmd = "fastdate --method_nodeprior --tree_file {tf} --prior_file {pf} --out_file {of} --out_form ultrametric --max_age {ma} --bd_rho 1 --grid {gs} > fastdate.out".format(tf=treefile,
-                                                                                                                                                                       pf=priorfile,
-                                                                                                                                                                       of=outfile,
-                                                                                                                                                                       ma=max_age_est,
-                                                                                                                                                                       gs=grid)
-                print(fd_cmd)
-                os.system(fd_cmd)
-            os.system("sumtrees.py --set-edges=mean-age --summarize-node-ages {od}/fastdate_out*.tre > {od}/{sf}".format(od=output_dir,
-                                                                                                                         sf=summary)) #TODO haaaaaaaacccckk
-            return summary
-    if method == 'bladj':
+    priorfile = '{}/node_prior.txt'.format(output_dir)
+    pr = write_fastdate_prior(subtree, dates, var_mult=0.1, outputfile=priorfile)
+    if pr:
+        for i in range(int(reps)):
+            treefile = '{}/fastdate_input{}.tre'.format(output_dir, i)
+            outfile = '{}/fastdate_out{}.tre'.format(output_dir, i)            
+            write_fastdate_tree(undated_treefile, br_len=0.01, polytomy_br=0.001, outputfile=treefile)
+            fd_cmd = "fastdate --method_nodeprior --tree_file {tf} --prior_file {pf} --out_file {of} --out_form ultrametric --max_age {ma} --bd_rho 1 --grid {gs} > fastdate.out".format(tf=treefile,
+                                                                                                                                                                   pf=priorfile,
+                                                                                                                                                                   of=outfile,
+                                                                                                                                                                   ma=max_age_est,
+                                                                                                                                                                   gs=grid)
+            print(fd_cmd)
+            os.system(fd_cmd)
+        os.system("sumtrees.py --set-edges=mean-age --summarize-node-ages {od}/fastdate_out*.tre > {od}/{sf}".format(od=output_dir,
+                                                                                                                     sf=summary)) #TODO haaaaaaaacccckk
+        return summary
+
+def run_bladj(subtree,
+              dates,
+              root_node,
+              max_age_est,
+              output_dir,
+              summary):
+        if not os.path.exists(output_dir):
+            os.mkdir(output_dir)
+        undated_treefile = "{}/unresolved.tre".format(output_dir)
+        subtree.write(path= undated_treefile, schema="newick")
         write_bladj_ages(subtree, dates, root_node, root_age=max_age_est, output_dir=output_dir)
         curr_dir = os.getcwd()
         os.chdir(output_dir)
-        os.system("phylocom bladj -f  ../{} > bladj_dates.tre".format(undated_treefile))
+        os.system("phylocom bladj -f  unresolved.tre > {}".format(summary))
         os.chdir(curr_dir)
-    return None
-
 
 def write_bladj_ages(subtree, dates, root_node, root_age, output_dir='.'):
     """
@@ -604,3 +644,39 @@ def write_bladj_ages(subtree, dates, root_node, root_age, output_dir='.'):
     ages.write("{}\t{}\n".format(root_node, root_age))
     ages.close()
     return outputfile
+
+def date_custom_synth(custom_synth_dir):
+    dp_tree=dendropy.Tree.get_from_path("{}/labelled_supertree/labelled_supertree.tre".format(custom_synth_dir), schema="newick")
+    tips = [leaf.taxon.label for leaf in dp_tree.leaf_node_iter()]
+    dates = chronogram.build_synth_node_source_ages(ultrametricity_precision=0.01)
+    
+    root_node = OT.synth_mrca(node_ids=tips).response_dict['mrca']['node_id']
+    if max_age:
+        max_age_est = max_age
+    elif root_node in dates['node_ages']:
+        max_age_est = max([source['age'] for source in dates['node_ages'][root_node]]) * 1.25
+        sys.stdout.write("Age estimate for root from data: {}\n".format(max_age_est))
+    else:
+        sys.stderr.write("ERROR: no age estimate for root - please provide max root age using --max_age\n")
+        return None
+    sys.stdout.write("Root node is {}, age estimate is  {}\n".format(root_node, max_age_est))
+
+
+    labeled_tree_str = taxonomy_helpers.conflict_tree_str(dp_tree)
+    conf = OT.conflict_str(labeled_tree_str, 'synth').response_dict
+
+    labeled_dp_tree = dendropy.Tree.get_from_string(labeled_tree_str, schema="newick")
+
+    matched_nodes = {}
+    for node in labeled_dp_tree:
+        if node.label:
+            nid = node.label.strip('_')
+            if nid in conf:
+                node_conf = conf[nid]
+                status = node_conf['status']
+                witness = node_conf['witness']
+                if status == 'supported_by':
+                    matched_nodes[nid] = witness
+                    node.label = witness
+
+

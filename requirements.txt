@@ -1,6 +1,6 @@
 
--e git+https://github.com/OpenTreeOfLife/python-opentree@main#egg=opentree
--e git+https://github.com/OpenTreeOfLife/peyotl@master#egg=peyotl
+-e git+https://github.com/OpenTreeOfLife/python-opentree@itol_annot#egg=opentree
+#-e git+https://github.com/OpenTreeOfLife/peyotl@master#egg=peyotl
 pytest
 sh
 configparser
