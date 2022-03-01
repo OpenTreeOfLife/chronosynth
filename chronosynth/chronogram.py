@@ -495,7 +495,7 @@ def prune_to_phylo_only(tree, cache_file_dir=None):
 def date_synth_subtree(node_id=None,
                        node_ids=None,
                        max_age=None,
-                       method = 'fastdate',
+                       method = 'bladj',
                        output_dir='Chrono_out',
                        summary='sumtre.tre',
                        phylo_only=False,
@@ -546,7 +546,8 @@ def date_synth_subtree(node_id=None,
               phylo_only=phylo_only,
               reps=reps,
               grid=grid)
-
+    rettree = open("{}/{}".format(output_dir, summary)).readlines()
+    return rettree
 
 def date_tree(subtree,
               dates,
