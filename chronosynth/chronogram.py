@@ -645,7 +645,13 @@ def write_bladj_ages(subtree, dates, root_node, root_age, output_dir='.'):
     ages.close()
     return outputfile
 
-def date_custom_synth(custom_synth_dir):
+def date_custom_synth(custom_synth_dir,
+                      method,
+                      output_dir,
+                      summary,
+                      phylo_only,
+                      reps,
+                      grid):
     dp_tree=dendropy.Tree.get_from_path("{}/labelled_supertree/labelled_supertree.tre".format(custom_synth_dir), schema="newick")
     tips = [leaf.taxon.label for leaf in dp_tree.leaf_node_iter()]
     dates = chronogram.build_synth_node_source_ages(ultrametricity_precision=0.01)
@@ -678,5 +684,6 @@ def date_custom_synth(custom_synth_dir):
                 if status == 'supported_by':
                     matched_nodes[nid] = witness
                     node.label = witness
+    date_tree()
 
 
