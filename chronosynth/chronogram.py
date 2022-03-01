@@ -353,18 +353,13 @@ def build_synth_node_source_ages(cache_file_path=None, ultrametricity_precision=
     return dates
 
 
-def synth_node_source_ages(node, cache_file_path=None):
+def synth_node_source_ages(node):
     """
     Return age estimates for a node.
     Arguemnts:
     node: Opentree node id
-    cache_file_path: path to a stored json with dates. default None.
     """
-    if cache_file_path is None:
-        cache_file_path = config.get('Paths', 'cache_file_path',
-                                     fallback='/tmp/node_ages.json')
-    log.debug("cache file path %s" % cache_file_path)
-    ##check if node is in synth?
+  
 
     synth_resp = OT.synth_node_info(node)
     retdict = {}
@@ -377,7 +372,7 @@ def synth_node_source_ages(node, cache_file_path=None):
                 msg = "Taxon {} is not monophyletic.\
                     resolving to MRCA: synth_node {}, and reporting dates for that\n".format(node, synth_resp)
                 retdict['msg'] = msg
-        dates = build_synth_node_source_ages(cache_file_path)
+        dates = build_synth_node_source_ages()
         retdict['ot:source_node_ages'] = dates['node_ages'].get(node)
     elif node.startswith('ott') and node.strip('ott').isnumeric():
         tax_resp = OT.taxon_info(node)
