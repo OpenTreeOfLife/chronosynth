@@ -27,8 +27,8 @@ config = configparser.ConfigParser()
 config.read(chronosynth.configfile)
 
 
-log = logging.getLogger(__name__)
-log.debug("logging set to debug")
+#log = logging.getLogger(__name__)
+#log.debug("logging set to debug")
 
 
 DC = opentree.object_conversion.DendropyConvert()
@@ -48,7 +48,7 @@ def set_prod():
 def print_endpoint():
     """Print endpoint"""
     print(OT._api_endpoint)
-    log.debug("api_endpoint is %s", format(OT._api_endpoint))
+#    log.debug("api_endpoint is %s", format(OT._api_endpoint))
 
 def find_trees(search_property="ot:branchLengthMode", value="ot:time"):
     """
@@ -255,10 +255,11 @@ def combine_ages_from_sources(source_ids,
             res = map_conflict_ages(tag, ultrametricity_precision=ultrametricity_precision, fresh=fresh)
         except ValueError:
 #            time_unit = res['metadata']['time_unit']
-            log.info('{}, conflict error\n'.format(tag))
+         #   log.info('{}, conflict error\n'.format(tag))
             continue
         if res is None:
-            log.info('{}, conflict empty\n'.format(tag))
+ #           log.info('{}, conflict empty\n'.format(tag))
+             pass
         else:
             sys.stdout.write("study {} has {} supported nodes\n".format(tag, len(res["supported_nodes"])))
             source_id = tag
@@ -359,8 +360,6 @@ def synth_node_source_ages(node):
     Arguemnts:
     node: Opentree node id
     """
-  
-
     synth_resp = OT.synth_node_info(node)
     retdict = {}
     retdict['query'] = node
@@ -532,9 +531,9 @@ def date_synth_subtree(node_id=None,
     sys.stdout.write("Root node is {}, age estimate is  {}\n".format(root_node, max_age_est))
 
     if node_id:
-        output = OT.synth_subtree(node_id=root_node, label_format='id')
+        output = OT.synth_subtree(node_id=root_node, label_format='id', include_all_node_labels=True)
     if node_ids:
-        output = OT.synth_induced_tree(node_ids=node_ids, label_format='id')
+        output = OT.synth_induced_tree(node_ids=node_ids, label_format='id', include_all_node_labels=True)
     subtree = dendropy.Tree.get_from_string(output.response_dict['newick'], schema='newick')
     date_tree(subtree=subtree,
               dates=dates,
