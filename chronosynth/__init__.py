@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 __version__ = "0.0.1"  # sync with setup.py
 
-import logging.config
+#import logging.config
 import sys
 import os
 
@@ -28,4 +28,4 @@ if not os.path.isfile(cfn):
 
 configfile = os.path.abspath(cfn)
 
-logging.config.fileConfig(configfile)
+#logging.config.fileConfig(configfile)
