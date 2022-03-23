@@ -81,7 +81,9 @@ def as_dendropy(source_id):
     tree_id = source_id.split('@')[1]
     study = OT.get_study(study_id)## Todo: catch failure of study GET
     study_nexson = study.response_dict['data']
-    tree_obj = DC.tree_from_nexson(study_nexson, tree_id)
+    tree_obj = DC.tree_from_nexson(study_nexson, tree_id, label_format="ot:ottId")
+    for tip in tree_obj.leaf_node_iter():
+        tip.taxon.label = str(tip.taxon.label)
     return tree_obj
 
 def node_ages(source_id, ultrametricity_precision=None):
@@ -194,7 +196,7 @@ def map_conflict_nodes(source_id):
     tree_id = source_id.split('@')[1]
     dp_tree = as_dendropy(source_id)
     time_unit = dp_tree.annotations.get_value("branchLengthTimeUnit")
-    assert time_unit == "Mya"
+#    assert time_unit == "Mya"
     metadata = {'study_id': study_id, 'tree_id': tree_id}
     output_conflict = OT.conflict_info(study_id, tree_id)
     conf = output_conflict.response_dict
@@ -409,7 +411,7 @@ def write_fastdate_prior(subtree, dates, var_mult=0.1, outputfile='node_prior.tx
                 mrca_dict[lab] = {}
                 mrca_dict[lab]['ages'] = dates['node_ages'][lab]
                 nd = subtree.find_node_with_label(lab)
-                mrca_dict[lab]['tips'] = [ti.taxon.label.replace(' ', '_') for ti in nd.leaf_iter()]
+                mrca_dict[lab]['tips'] = [str(ti.taxon.label).replace(' ', '_') for ti in nd.leaf_iter()]
     if len(mrca_dict) == 0:
         sys.stderr.write("no calibrations\n")
         return None
@@ -566,7 +568,7 @@ def date_tree(subtree,
         run_fastdate(subtree, dates, max_age_est, output_dir, summary, reps, grid)
     if method == 'bladj':
        run_bladj(subtree, dates, root_node, max_age_est, output_dir, summary)
-    return None
+    return summary
 
 def run_fastdate(subtree,
                  dates,
@@ -682,3 +684,29 @@ def date_custom_synth(custom_synth_dir,
     date_tree()
 
 
+def get_dated_parent_age(subtree):
+    '''Tree miust have ott_id + otu labels'''
+    dates = build_synth_node_source_ages()
+    leaves = [leaf.taxon.label for leaf in subtree.leaf_node_iter()]
+    ott_ids = []
+    for leaf in leaves:
+        try: 
+            ott_ids.append(int((leaf)))
+        except:
+            pass
+    root_node = OT.synth_mrca(ott_ids=ott_ids).response_dict['mrca']['node_id']
+    if root_node in dates['node_ages']:
+        max_age_est = max([source['age'] for source in dates['node_ages'][root_node]])
+        return max_age_est
+    else:
+        ott_id = OT.taxon_mrca(ott_ids=ott_ids).response_dict['mrca']['ott_id']
+        if 'ott' + ott_id in dates['node_ages']:
+            max_age_est = max([source['age'] for source in dates['node_ages'][root_node]])
+            return max_age_est
+        else:      
+            lineage = OT.taxon_info(ott_id, include_lineage=True).response_dict['lineage']
+            for parent in lineage:
+                ott_id = parent['ott_id']
+                if 'ott' + ott_id in dates['node_ages']:
+                    max_age_est = max([source['age'] for source in dates['node_ages'][root_node]])
+                    return max_age_est
