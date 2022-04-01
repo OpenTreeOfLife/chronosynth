@@ -11,7 +11,6 @@ from opentree import OT, OTCommandLineTool
 """
 e.g. python examples/synthpriordate.py --node_ids_file ../GBIF-Biodiverse-OpenTree/data/gymnosperms.csv --output_dir gymno_fastdate --method fastdate --reps 10 --grid 1000  --max_age 385 --phylo_only
 
-
 """
 
 

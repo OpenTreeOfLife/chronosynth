@@ -11,6 +11,7 @@ import random
 import configparser
 import statistics
 import logging
+import copy
 
 from sh import git
 import dendropy
@@ -216,6 +217,49 @@ def map_conflict_nodes(source_id):
     ret = {'metadata':metadata, 'matched_nodes':matched_nodes, 'tree':dp_tree}
     return ret
 
+
+def conflict_tree_str(inputtree):
+    """Write out a tree with labels that work for the OpenTree Conflict API
+    """
+    tmp_tree = copy.deepcopy(inputtree)
+    i = 1
+    for node in tmp_tree:
+        i += 1
+        if node.taxon:
+            new_label = "_nd{}_{}".format(i, node.taxon.label)
+            node.taxon.label = new_label
+        else:
+            node.label = "_nd{}_".format(i)
+    return tmp_tree.as_string(schema="newick")
+
+def map_conflict_nodes_tree(inputtree):
+    """
+    Takes a source id in format newick tree
+
+    returns a dictionary of:
+    {
+    'matched_nodes':{node_id : synnode_label}}
+    }
+    """
+
+    treestr = conflict_tree_str(inputtree)
+    output_conflict = OT.conflict_str(treestr)
+    conf = output_conflict.response_dict
+    if conf is None:
+        url = "https://tree.opentreeoflife.org/curator/study/view/{}/?tab=home&tree={}".format(metadata['study_id'],
+                                                                                               metadata['tree_id'])
+        sys.stderr.write("No conflict data available for tree {} \n Check its status at {}\n".format(source_id, url))
+        return None
+    matched_nodes = {}
+    for node in inputtree:
+        if node.label in conf:
+            node_conf = conf[node.label]
+            status = node_conf['status']
+            witness = node_conf['witness']
+            if status == 'supported_by':
+                matched_nodes[node.label] = witness
+    ret = {'metadata':'inputtree', 'matched_nodes':matched_nodes, 'tree':inputtree}
+    return ret
 
 
 def combine_ages_from_sources(source_ids,
@@ -684,29 +728,23 @@ def date_custom_synth(custom_synth_dir,
     date_tree()
 
 
-def get_dated_parent_age(subtree):
+def get_dated_parent_age(ott_ids):
     '''Tree miust have ott_id + otu labels'''
-    dates = build_synth_node_source_ages()
-    leaves = [leaf.taxon.label for leaf in subtree.leaf_node_iter()]
-    ott_ids = []
-    for leaf in leaves:
-        try: 
-            ott_ids.append(int((leaf)))
-        except:
-            pass
+    dates = build_synth_node_source_ages(ultrametricity_precision=0.01)
     root_node = OT.synth_mrca(ott_ids=ott_ids).response_dict['mrca']['node_id']
     if root_node in dates['node_ages']:
         max_age_est = max([source['age'] for source in dates['node_ages'][root_node]])
         return max_age_est
     else:
         ott_id = OT.taxon_mrca(ott_ids=ott_ids).response_dict['mrca']['ott_id']
-        if 'ott' + ott_id in dates['node_ages']:
+        if 'ott' + str(ott_id) in dates['node_ages']:
             max_age_est = max([source['age'] for source in dates['node_ages'][root_node]])
             return max_age_est
         else:      
             lineage = OT.taxon_info(ott_id, include_lineage=True).response_dict['lineage']
             for parent in lineage:
                 ott_id = parent['ott_id']
-                if 'ott' + ott_id in dates['node_ages']:
-                    max_age_est = max([source['age'] for source in dates['node_ages'][root_node]])
+                if 'ott' + str(ott_id) in dates['node_ages']:
+                    max_age_est = max([source['age'] for source in dates['node_ages']['ott' + str(ott_id)]])
+                    print("max_age estimate from {}".format('ott' + str(ott_id)))
                     return max_age_est
