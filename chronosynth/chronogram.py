@@ -87,7 +87,8 @@ def as_dendropy(source_id):
         tip.taxon.label = str(tip.taxon.label)
     return tree_obj
 
-def node_ages(source_id, ultrametricity_precision=None):
+def node_ages(dp_tree,
+              ultrametricity_precision=None):
     """
     Get node ages for a DendroPy tree object.
     Inputs
@@ -106,13 +107,8 @@ def node_ages(source_id, ultrametricity_precision=None):
     if ultrametricity_precision is None:
         ultrametricity_precision = float(config.get('params', 'ultrametricity_precision',
                                                     fallback='0.01'))
-
-    study_id = source_id.split('@')[0]
-    tree_id = source_id.split('@')[1]
-    dp_tree = as_dendropy(source_id)
     assert dp_tree.annotations.get_value("branchLengthMode") == 'ot:time'
     time_unit = dp_tree.annotations.get_value("branchLengthTimeUnit")
-    metadata = {'study_id': study_id, 'tree_id': tree_id, 'time_unit' :time_unit}
     ages = {}
     try:
         dp_tree.internal_node_ages(ultrametricity_precision=ultrametricity_precision)
@@ -120,46 +116,64 @@ def node_ages(source_id, ultrametricity_precision=None):
             assert node.label not in ages.keys()
             ages[node.label] = node.age
     except dendropy.utility.error.UltrametricityError as err:
-        sys.stderr.write("source {} does not meet ultrametricity_precision threshold of {}".format(source_id, ultrametricity_precision))
+        sys.stderr.write("source does not meet ultrametricity_precision threshold of {}".format(ultrametricity_precision))
         return None
-    ret = {'metadata':metadata, 'ages':ages}
+    ret = {'ages':ages}
     return ret
 
 
-def map_conflict_ages(source_id,
+def map_conflict_ages(source,
+                      compare_to="synth",
                       ultrametricity_precision=None,
-#                      repo_dir=None, ##ToDo run locally....
                       cache_file_path=None,
                       fresh=False):
     """
-    Takes a source id in format study_id@tree_id
+    Takes a source id in format study_id@tree_id OR an input tree
 
     returns a dictionary of:
     {'metadata':{'study_id': study_id, 'tree_id': tree_id,
                  'time_unit': time_unit, 'synth_version':version, sha},
     'supported_nodes':{synth_node_id : {'age':age, 'node_label':node_label}}
     """
-    if cache_file_path is None:
-        cache_file_dir = config.get('paths', 'cache_file_dir',
-                                    fallback='/tmp/')
-        cache_file_path = cache_file_dir + '/{}.json'.format(source_id)
-    if os.path.exists(cache_file_path) and fresh == False:
-        sys.stdout.write("Loading" + cache_file_path + "\n")
-        ret = json.load(open(cache_file_path))
-        return ret
-    ages_data = node_ages(source_id, ultrametricity_precision=ultrametricity_precision)
+    if compare_to == 'synth':
+        if cache_file_path is None:
+            cache_file_dir = config.get('paths', 'cache_file_dir',
+                                        fallback='/tmp/')
+            cache_file_path = cache_file_dir + '/{}.json'.format(source)
+        if os.path.exists(cache_file_path) and fresh == False:
+            sys.stdout.write("Loading" + cache_file_path + "\n")
+            ret = json.load(open(cache_file_path))
+            return ret
+    else:
+        cache_file_path = None
+    if isinstance(source, str):
+        source_id = source
+        study_id = source_id.split('@')[0]
+        tree_id = source_id.split('@')[1]
+        dp_tree = as_dendropy(source_id)
+        time_unit = dp_tree.annotations.get_value("branchLengthTimeUnit")
+        metadata = {'source_id':source_id,
+                    'study_id': study_id,
+                    'tree_id': tree_id,
+                    'compare_to': compare_to,
+                    'time_unit':time_unit}
+    elif isinstance(source, dendropy.datamodel.treemodel.Tree):
+        dp_tree = source
+        metadata = {'source_id':'direct_input',
+                    'compare_to': compare_to, 
+                    'time_unit':time_unit}
+    ages_data = node_ages(dp_tree,
+                          ultrametricity_precision=ultrametricity_precision)
     if ages_data is None:
         return None
-    metadata = ages_data['metadata']
     version = OT.about()
     metadata['synth_tree_about'] = version['synth_tree_about']
-    output_conflict = OT.conflict_info(study_id=metadata['study_id'],
-                                       tree_id=metadata['tree_id'])
+
+    treestr = conflict_tree_str(dp_tree)
+    output_conflict = OT.conflict_str(treestr, compare_to)
     conf = output_conflict.response_dict
     if conf is None:
-        url = "https://tree.opentreeoflife.org/curator/study/view/{}/?tab=home&tree={}".format(metadata['study_id'],
-                                                                                               metadata['tree_id'])
-        sys.stderr.write("No conflict data available for tree {} \n Check its status at {}\n".format(source_id,
+        sys.stderr.write("No conflict data available for tree {} \n Check its status at {}\n".format(metadata['source_id'],
                                                                                                      url))
         return None
     supported_nodes = {}
@@ -178,32 +192,37 @@ def map_conflict_ages(source_id,
             supported_nodes[witness] = {'age':age, 'node_label':node_label}
     ret = {'metadata':metadata, 'supported_nodes':supported_nodes}
     sf = json.dumps(ret, sort_keys=True, indent=2, separators=(',', ': '), ensure_ascii=True)
-    ofi = open(cache_file_path, 'w')
-    ofi.write(sf)
-    ofi.close()
+    if cache_file_path:
+        ofi = open(cache_file_path, 'w')
+        ofi.write(sf)
+        ofi.close()
     return ret
 
 
-def map_conflict_nodes(source_id):
+
+def map_conflict_nodes(source, compare_to='synth'):
     """
-    Takes a source id in format study_id@tree_id
+    Takes a source id in format study_id@tree_id OR a dendropy tree
 
     returns a dictionary of:
     {
     'matched_nodes':{node_id : synnode_label}}
     }
     """
-    study_id = source_id.split('@')[0]
-    tree_id = source_id.split('@')[1]
-    dp_tree = as_dendropy(source_id)
+    if isinstance(source, str):
+        source_id = source
+        study_id = source_id.split('@')[0]
+        tree_id = source_id.split('@')[1]
+        dp_tree = as_dendropy(source_id)
+        metadata = {'source_id':source_id,'study_id': study_id, 'tree_id': tree_id, 'compare_to': compare_to}
+    elif isinstance(source, dendropy.datamodel.treemodel.Tree):
+        dp_tree = source
+        metadata = {'source_id':'direct_input', 'compare_to': compare_to}
     time_unit = dp_tree.annotations.get_value("branchLengthTimeUnit")
-#    assert time_unit == "Mya"
-    metadata = {'study_id': study_id, 'tree_id': tree_id}
-    output_conflict = OT.conflict_info(study_id, tree_id)
+    treestr = conflict_tree_str(dp_tree)
+    output_conflict = OT.conflict_str(treestr, compare_to)
     conf = output_conflict.response_dict
     if conf is None:
-        url = "https://tree.opentreeoflife.org/curator/study/view/{}/?tab=home&tree={}".format(metadata['study_id'],
-                                                                                               metadata['tree_id'])
         sys.stderr.write("No conflict data available for tree {} \n Check its status at {}\n".format(source_id, url))
         return None
     matched_nodes = {}
@@ -226,43 +245,19 @@ def conflict_tree_str(inputtree):
     for node in tmp_tree:
         i += 1
         if node.taxon:
-            new_label = "_nd{}_{}".format(i, node.taxon.label)
-            node.taxon.label = new_label
+            if node.taxon.label.startswith('ott'):
+                pass
+            else:
+                new_label = "ott{}".format(node.taxon.label)
+                node.taxon.label = new_label
         else:
-            node.label = "_nd{}_".format(i)
+            node.label = "_{}_".format(node.label)
     return tmp_tree.as_string(schema="newick")
 
-def map_conflict_nodes_tree(inputtree):
-    """
-    Takes a source id in format newick tree
-
-    returns a dictionary of:
-    {
-    'matched_nodes':{node_id : synnode_label}}
-    }
-    """
-
-    treestr = conflict_tree_str(inputtree)
-    output_conflict = OT.conflict_str(treestr)
-    conf = output_conflict.response_dict
-    if conf is None:
-        url = "https://tree.opentreeoflife.org/curator/study/view/{}/?tab=home&tree={}".format(metadata['study_id'],
-                                                                                               metadata['tree_id'])
-        sys.stderr.write("No conflict data available for tree {} \n Check its status at {}\n".format(source_id, url))
-        return None
-    matched_nodes = {}
-    for node in inputtree:
-        if node.label in conf:
-            node_conf = conf[node.label]
-            status = node_conf['status']
-            witness = node_conf['witness']
-            if status == 'supported_by':
-                matched_nodes[node.label] = witness
-    ret = {'metadata':'inputtree', 'matched_nodes':matched_nodes, 'tree':inputtree}
-    return ret
 
 
 def combine_ages_from_sources(source_ids,
+                              compare_to = 'synth',
                               ultrametricity_precision=None,
                               json_out=None,
                               fresh=False):
@@ -298,7 +293,10 @@ def combine_ages_from_sources(source_ids,
     synth_node_ages['metadata']['phylesystem_sha'] = get_phylesystem_sha()
     for tag in source_ids:
         try:
-            res = map_conflict_ages(tag, ultrametricity_precision=ultrametricity_precision, fresh=fresh)
+            res = map_conflict_ages(tag,
+                                    compare_to = compare_to,
+                                    ultrametricity_precision=ultrametricity_precision,
+                                    fresh=fresh)
         except ValueError:
 #            time_unit = res['metadata']['time_unit']
          #   log.info('{}, conflict error\n'.format(tag))
@@ -353,7 +351,11 @@ def pull_phylesystem(repo_dir, repo_url="https://github.com/OpenTreeOfLife/phyle
     git(git_dir_arg, 'pull', repo_url)
 
 
-def build_synth_node_source_ages(cache_file_path=None, ultrametricity_precision=None, repo_dir=None, fresh=False):
+def build_synth_node_source_ages(compare_to='synth',
+                                 cache_file_path=None,
+                                 ultrametricity_precision=None,
+                                 fresh=False,
+                                 sources='all'):
     """
     This combines all of the input node ages mapped using "map conflict ages".
     Returns a dictionary, and caches the dict in
@@ -362,43 +364,34 @@ def build_synth_node_source_ages(cache_file_path=None, ultrametricity_precision=
                             Defaults to node_ages.json, dir set in config,
                             or defaults /tmp/node_ages.json
     ultrametricity_precision: a float passed to dendropy
-    repo_dir: a local clone of phylesystem. Defaults to None, and uses remote
-    fresh: Whether to re-map trees to synth and est ages
+f    fresh: Whether to re-map trees to synth and est ages
     """
-    if cache_file_path is None:
-        cache_file_dir = config.get('paths', 'cache_file_dir',
-                                    fallback='/tmp/')
-        cache_file_path = cache_file_dir + '/node_ages.json'
-    if os.path.exists(cache_file_path) and fresh == False:
-        dates = json.load(open(cache_file_path))
-        current_sha = get_phylesystem_sha(repo_dir=repo_dir)
-        cached_sha = dates['metadata'].get('phylesystem_sha')
-        if cached_sha == current_sha:
-            sys.stdout.write("No new changes to phylesystem, using cached dates at {}\n".format(cache_file_path))
-            return dates
-        if cached_sha != current_sha:
-            if repo_dir:
-                repo = PhylesystemGitAction(repo=repo_dir)
-                changed_studies = repo.get_changed_docs(cached_sha)
-                sys.stdout.write("Mapping changed studies")
-                ## Re-est conflict and BL's for changed studies
-                changed_trees = [source for source in sources if source.split('@') in changed_studies]
-                for source_id in changed_trees:
-                    map_conflict_ages(source_id,
-                                      ultrametricity_precision=ultrametricity_precision,
-                                      repo_dir=repo_dir,
-                                      fresh=True)
-            else:
+    if compare_to =='synth':
+        if cache_file_path is None:
+            cache_file_dir = config.get('paths', 'cache_file_dir',
+                                        fallback='/tmp/')
+            cache_file_path = cache_file_dir + '/node_ages.json'
+        if os.path.exists(cache_file_path) and fresh == False:
+            dates = json.load(open(cache_file_path))
+            current_sha = get_phylesystem_sha()
+            cached_sha = dates['metadata'].get('phylesystem_sha')
+            if cached_sha == current_sha:
+                sys.stdout.write("No new changes to phylesystem, using cached dates at {}\n".format(cache_file_path))
+                return dates
+            if cached_sha != current_sha:
                 sys.stdout.write("Phylesystem has changed since dates were cached, reloading and saving to {}\n".format(cache_file_path))
+        else:
+            sys.stdout.write("No date cache found. Loading dates and saving to {}\n".format(cache_file_path))
     else:
-        sys.stdout.write("No date cache found. Loading dates and saving to {}\n".format(cache_file_path))
-    sources = find_trees()
+        cache_file_path = None
+    if sources == 'all':
+        sources = find_trees()
     dates = combine_ages_from_sources(sources,
                                       ultrametricity_precision=ultrametricity_precision,
                                       json_out=cache_file_path,
-                                      fresh=fresh)
+                                      fresh=fresh,
+                                      compare_to = compare_to)
     return dates
-
 
 def synth_node_source_ages(node):
     """

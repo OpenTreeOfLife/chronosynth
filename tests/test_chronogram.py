@@ -1,4 +1,6 @@
 import chronosynth
+import dendropy
+from opentree import OT
 from chronosynth import chronogram
 from chronosynth.chronogram import find_trees, node_ages, as_dendropy, map_conflict_ages
 
@@ -16,8 +18,8 @@ def test_dp_convert():
 
 
 def test_node_ages():
-    age_data = node_ages('ot_1000@tree1')
-    assert age_data['metadata']['time_unit'] == 'Myr'
+    dp_tree=chronogram.as_dendropy('ot_1000@tree1')
+    age_data = node_ages(dp_tree)
     assert len(age_data['ages']) == 290
     assert age_data['ages']['node564'] == 21.381546999999998
 
@@ -31,7 +33,7 @@ def test_no_conflict_data():
 ## fails on dev bc study doesn't exist
     chronogram.print_endpoint()
     res = map_conflict_ages('ot_1980@tree2')
-    assert res is None
+    assert res['supported_nodes'] == {}
     ## all tips in tree map to same taxon
 
 # TODO: add test of map conflict for all from compare_dates.py
@@ -60,6 +62,31 @@ def test_synth_node_source_ages():
 
     # Bad node id
     resp3 = chronogram.synth_node_source_ages('mrcaott1000311ott364372913412341')
+
+
+
+def test_conflict_newick():
+    custom_synth_tree = dendropy.Tree.get_from_path("tests/data/labelled_supertree.tre",
+                                                    schema = "newick")
+    custom_str = chronogram.conflict_tree_str(custom_synth_tree)
+    dp_tree = as_dendropy('ot_2013@tree8')
+    alt_str = chronogram.conflict_tree_str(dp_tree)
+    resp = OT.conflict_str(alt_str, compare_to=custom_str)
+    assert len(resp.response_dict.keys()) == 351
+
+
+
+
+def test_custom_synth_node_source_ages():
+    custom_synth_tree = dendropy.Tree.get_from_path("tests/data/labelled_supertree.tre",
+                                                    schema = "newick")
+    custom_str = chronogram.conflict_tree_str(custom_synth_tree)
+    custom_dates = chronogram.build_synth_node_source_ages(compare_to = custom_str,
+                                                          fresh = True,
+                                                          sources = ['ot_2013@tree8'])
+    assert len(custom_dates['node_ages']) == 131
+
+
 
 def test_fastdate_write():
     # Hmmmmmm should ideally not require rebuild of whole dang thing...
