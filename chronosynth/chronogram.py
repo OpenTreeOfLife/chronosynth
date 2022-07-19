@@ -251,7 +251,7 @@ def conflict_tree_str(inputtree):
                 new_label = "ott{}".format(node.taxon.label)
                 node.taxon.label = new_label
         else:
-            node.label = "_{}_".format(node.label)
+            node.label = "{}".format(node.label)
     return tmp_tree.as_string(schema="newick")
 
 
@@ -654,12 +654,14 @@ def run_bladj(subtree,
 
 def write_bladj_ages(subtree, dates, root_node, root_age, output_dir='.'):
     """
-    Writes out an ages file 
+    Writes out an ages and a citation file 
     """
     outputfile = "{}/ages".format(output_dir)
+    cites = open("{}/cites.txt".format(output_dir), 'w')
     ages = open(outputfile,'w')
     dated_nodes = set()
     undated_nodes = set()
+    sources = set()
     for node in subtree:
         lab = None
         if node.label:
@@ -669,12 +671,15 @@ def write_bladj_ages(subtree, dates, root_node, root_age, output_dir='.'):
                 lab = node.label
             if lab in dates['node_ages']:
                 dated_nodes.add(lab)
+                sources.update([source['source_id'] for source in dates['node_ages'][lab]])
                 age_range = [float(source['age']) for source in dates['node_ages'][lab]]
                 age_range.sort()
                 age_est = sum(age_range) / len(age_range) 
                 ages.write("{}\t{}\n".format(node.label, age_est))
             else:
                 undated_nodes.add(lab)
+    cites.write("\n".join(list(sources)))
+    cites.close()
     ages.write("{}\t{}\n".format(root_node, root_age))
     ages.close()
     return outputfile
