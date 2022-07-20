@@ -33,7 +33,7 @@ def main(arg_list, out, list_for_results=None):
     cli.parser.add_argument("--phylo_only", default=False, action='store_true', required=False,
                         help='prune to only tips with some phylogenetic information')
     cli.parser.add_argument("--method", default='fastdate', required=False,
-                        help="methdo to date tree. Currnetly 'fastdate' or 'bladj")
+                        help="method to date tree. Currnetly 'fastdate' or 'bladj")
     cli.parser.add_argument("--verbose", action="store_true", help='include meta-data in response')
     OT, args = cli.parse_cli(arg_list)
 
