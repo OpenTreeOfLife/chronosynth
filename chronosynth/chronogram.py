@@ -427,6 +427,20 @@ def synth_node_source_ages(node):
     return retdict
 
 
+def date_dist_summary(ages, method):
+    """Generates a prior for a node based on existing dates"""
+    assert method in ['mean', 'max', 'min', 'rand']
+    if method == 'mean':
+        avgage = sum(ages)/len(ages)
+        if len(ages) > 1:
+            var = statistics.variance(ages)
+        else:
+            var = var_mult*avgage
+        if var < 0.001:
+             var = 0.001 #ToDO haaaaaack
+    return(mean, var)
+
+
 def write_fastdate_prior(subtree, dates, var_mult=0.1, outputfile='node_prior.txt'):
     """
     Writes out a node prior file for fatsdate input, with normal prior on each  node with any dates.
@@ -459,14 +473,8 @@ def write_fastdate_prior(subtree, dates, var_mult=0.1, outputfile='node_prior.tx
         fi.write("'")
         fi.write(' ')
         ages = [source['age'] for source in mrca_dict[dated_node]['ages']]
-        avgage = sum(ages)/len(ages)
-        if len(ages) > 1:
-            var = statistics.variance(ages)
-        else:
-            var = var_mult*avgage
-        if var < 0.001:
-            var = 0.001 #ToDO haaaaaack
-        fi.write('norm({},{},{})\n'.format(0, var, avgage))
+        mean, var = age_dist_summary(ages)
+        fi.write('norm({},{},{})\n'.format(0, var, mean))
     fi.close()
     return outputfile
 
@@ -726,10 +734,16 @@ def date_custom_synth(custom_synth_dir,
     date_tree()
 
 
-def get_dated_parent_age(ott_ids):
+def get_dated_parent_age(ott_ids=None, node_ids=None, root_node=None):
     '''Tree miust have ott_id + otu labels'''
     dates = build_synth_node_source_ages(ultrametricity_precision=0.01)
-    root_node = OT.synth_mrca(ott_ids=ott_ids).response_dict['mrca']['node_id']
+    if ott_ids:
+        root_node = OT.synth_mrca(ott_ids=ott_ids).response_dict['mrca']['node_id']
+    elif node_ids:
+        root_node = OT.synth_mrca(node_ids=node_ids).response_dict['mrca']['node_id']
+    if root_node is None:
+        print("ott_ids, node_ids, or a root_node are required")
+        return None     
     if root_node in dates['node_ages']:
         max_age_est = max([source['age'] for source in dates['node_ages'][root_node]])
         return max_age_est

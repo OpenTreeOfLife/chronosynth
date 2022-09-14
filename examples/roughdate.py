@@ -3,6 +3,8 @@ import os
 from chronosynth import chronogram
 from opentree import OT
 
+"""script to use dates from other trees to rougly estimate dates
+for other trees with branch lengths, in order to corss- apply those dates back to synth"""
 sc = chronogram.find_trees(value='ot:substitutionCount')
 #un = chronogram.find_trees(value='ot:undefined')
 #cc = chronogram.find_trees(value='ot:changesCount')
@@ -45,7 +47,7 @@ for leaf in leaves:
 
 root_node = OT.synth_mrca(ott_ids=ott_ids).response_dict['mrca']['node_id']
 
-max_age_est = chronogram.get_dated_parent_age(maps['tree'])
+max_age_est = chronogram.get_dated_parent_age(root_node=root_node)
 
 chronogram.date_tree(maps['tree'],
                      dates,
@@ -55,7 +57,7 @@ chronogram.date_tree(maps['tree'],
                      output_dir=output_dir,
                      summary='trial.tre',
                      phylo_only=False,
-                     reps=5,
+                     reps=1,
                      grid=len(leaves))
 
 
