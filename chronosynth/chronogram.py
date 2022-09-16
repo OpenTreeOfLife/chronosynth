@@ -467,16 +467,18 @@ def write_fastdate_prior(subtree, dates, select='mean', var_mult=0.1, outputfile
         sys.stderr.write("no calibrations\n")
         return None
     fi = open(outputfile, 'w')
+    sources = set()
     for dated_node in mrca_dict:
         fi.write("'")
         fi.write("','".join(mrca_dict[dated_node]['tips']))
         fi.write("'")
         fi.write(' ')
         ages = [source['age'] for source in mrca_dict[dated_node]['ages']]
+        sources.update([source['source_id'] for source in dates['node_ages'][lab]])
         mean, var = date_dist_summary(ages, select, var_mult)
         fi.write('norm({},{},{})\n'.format(0, var, mean))
     fi.close()
-    return outputfile
+    return {'sources':sources, 'outputfile':outputfile}
 
 def write_fastdate_tree(subtreepath,
                         br_len=0.01,
@@ -583,19 +585,19 @@ def date_synth_subtree(node_id=None,
     if node_ids:
         output = OT.synth_induced_tree(node_ids=node_ids, label_format='id', include_all_node_labels=True)
     subtree = dendropy.Tree.get_from_string(output.response_dict['newick'], schema='newick')
-    outtreesfile = date_tree(subtree=subtree,
-                  dates=dates,
-                  root_node=root_node,
-                  max_age_est=max_age_est,
-                  method=method,
-                  output_dir=output_dir,
-                  phylo_only=phylo_only,
-                  reps=reps,
-                  grid=grid,
-                  select=select)
+    outtreesfile, sources = date_tree(subtree=subtree,
+                              dates=dates,
+                              root_node=root_node,
+                              max_age_est=max_age_est,
+                              method=method,
+                              output_dir=output_dir,
+                              phylo_only=phylo_only,
+                              reps=reps,
+                              grid=grid,
+                              select=select)
     summaryfilepath = "{}/{}".format(output_dir, summary)
     rettree = summarize_trees(outtreesfile, summaryfilepath)
-    return rettree
+    return rettree, sources
 
 def date_tree(subtree,
               dates,
@@ -612,10 +614,10 @@ def date_tree(subtree,
         subtree = prune_to_phylo_only(subtree)
         sys.stdout.write("{} phylo informed leaves in tree\n".format(len(subtree)))
     if method == 'fastdate':
-        outtreesfile = run_fastdate(subtree, dates, max_age_est, output_dir, reps, grid, select)
+        outtreesfile, sources = run_fastdate(subtree, dates, max_age_est, output_dir, reps, grid, select)
     if method == 'bladj':
-       outtreesfile = run_bladj(subtree, dates, root_node, max_age_est, output_dir, reps=reps, select=select)
-    return outtreesfile
+       outtreesfile, sources = run_bladj(subtree, dates, root_node, max_age_est, output_dir, reps=reps, select=select)
+    return outtreesfile, sources
 
 
 def summarize_trees(treesfile, summaryfilepath = "sumtre.tre"):
@@ -652,7 +654,7 @@ def run_fastdate(subtree,
         os.system(fd_cmd)
     treesfile = "{}/fastdate_trees.tre".format(output_dir)
     os.system("cat {}/fastdate_out*.tre {}".format(output_dir), treesfile)
-    return treesfile
+    return treesfile, pr['sources']
 
 def run_bladj(subtree,
               dates,
@@ -666,13 +668,13 @@ def run_bladj(subtree,
         undated_treefile = "{}/unresolved.tre".format(output_dir)
         subtree.write(path= undated_treefile, schema="newick")
         for i in range(int(reps)):
-            write_bladj_ages(subtree, dates, root_node, select, root_age=max_age_est, output_dir=output_dir)
+            pr = write_bladj_ages(subtree, dates, root_node, select, root_age=max_age_est, output_dir=output_dir)
             curr_dir = os.getcwd()
             os.chdir(output_dir)
             os.system("phylocom bladj -f  unresolved.tre >> bladj.tre")
             os.chdir(curr_dir)
         treesfile = "{}/bladj.tre".format(output_dir)
-        return treesfile
+        return treesfile, pr['sources']
 
 def write_bladj_ages(subtree, dates, root_node, select, root_age, output_dir='.'):
     """
