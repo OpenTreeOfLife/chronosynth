@@ -34,6 +34,8 @@ def main(arg_list, out, list_for_results=None):
                         help='prune to only tips with some phylogenetic information')
     cli.parser.add_argument("--method", default='fastdate', required=False,
                         help="method to date tree. Currnetly 'fastdate' or 'bladj")
+    cli.parser.add_argument("--select", default='mean', required=False,
+                        help="how to summarize ages for inference. ['mean', 'min', 'max', 'random']")
     cli.parser.add_argument("--verbose", action="store_true", help='include meta-data in response')
     OT, args = cli.parse_cli(arg_list)
 
@@ -44,14 +46,16 @@ def main(arg_list, out, list_for_results=None):
                                       max_age=args.max_age,
                                       output_dir=args.output_dir,
                                       phylo_only=args.phylo_only,
-                                      method=args.method)
+                                      method=args.method,
+                                      select=args.select)
     elif args.node_ids:
         chronogram.date_synth_subtree(node_ids=args.node_ids,
                                       reps=args.reps,
                                       max_age=args.max_age,
                                       output_dir=args.output_dir,
                                       phylo_only=args.phylo_only,
-                                      method=args.method)
+                                      method=args.method,
+                                      select=args.select)
     elif args.node_ids_file:
         assert os.path.exists(args.node_ids_file)
         queryfile = open(args.node_ids_file)
