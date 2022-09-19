@@ -599,9 +599,9 @@ def date_synth_subtree(node_id=None,
                                       grid=grid,
                                       select=select,
                                       resolve_polytomies=resolve_polytomies)
-    return_dict = {'dated_trees':open(outtreesfile).readlines(),
+    return_dict = {'dated_trees_newick_list':[tree.rstrip() for tree in open(outtreesfile).readlines()],
                    'topology_sources': synth_output.response_dict['supporting_studies'],
-                   'date_sources':sources}
+                   'date_sources':list(sources)}
     if summarize:
         summaryfilepath = "{}/{}".format(output_dir, summary)
         sumtree = summarize_trees(outtreesfile, summaryfilepath)
@@ -626,7 +626,14 @@ def date_tree(subtree,
     if method == 'fastdate':
         outtreesfile, sources = run_fastdate(subtree, dates, max_age_est, output_dir, reps, grid, select)
     if method == 'bladj':
-       outtreesfile, sources = run_bladj(subtree, dates, root_node, max_age_est, output_dir, reps=reps, select=select, resolve_polytomies=resolve_polytomies)
+       outtreesfile, sources = run_bladj(subtree,
+                                         dates,
+                                         root_node,
+                                         max_age_est,
+                                         output_dir,
+                                         reps=reps,
+                                         select=select,
+                                         resolve_polytomies=resolve_polytomies)
     return outtreesfile, sources
 
 

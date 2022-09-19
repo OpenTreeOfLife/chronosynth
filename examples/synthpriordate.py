@@ -43,7 +43,7 @@ def main(arg_list, out, list_for_results=None):
 
 
     if args.node_id:
-        chronogram.date_synth_subtree(node_id=args.node_id,
+        ret = chronogram.date_synth_subtree(node_id=args.node_id,
                                       reps=args.reps,
                                       max_age=args.max_age,
                                       output_dir=args.output_dir,
@@ -52,7 +52,7 @@ def main(arg_list, out, list_for_results=None):
                                       select=args.select,
                                       resolve_polytomies=args.rand_resolve)
     elif args.node_ids:
-        chronogram.date_synth_subtree(node_ids=args.node_ids,
+        ret = chronogram.date_synth_subtree(node_ids=args.node_ids,
                                       reps=args.reps,
                                       max_age=args.max_age,
                                       output_dir=args.output_dir,
@@ -74,7 +74,7 @@ def main(arg_list, out, list_for_results=None):
                 ott_ids.add('ott'+lii[0])
         ott_ids = list(ott_ids)    
 #        print(OT.synth_mrca(node_ids=ott_ids).response_dict['mrca']['node_id'])
-        chronogram.date_synth_subtree(node_ids=ott_ids,
+        ret = chronogram.date_synth_subtree(node_ids=ott_ids,
                                       reps=args.reps,
                                       max_age=args.max_age,
                                       output_dir=args.output_dir,
@@ -83,9 +83,10 @@ def main(arg_list, out, list_for_results=None):
                                       method=args.method,
                                       select=args.select,
                                       resolve_polytomies=args.rand_resolve)
-
     else:
         sys.stderr("-node_id OR --node_ids OR -node_ids_file are required as an argument")
+    sys.stdout.write(json.dumps(ret))
+
         
 
 
