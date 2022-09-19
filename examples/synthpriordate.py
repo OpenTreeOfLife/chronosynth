@@ -36,6 +36,8 @@ def main(arg_list, out, list_for_results=None):
                         help="method to date tree. Currnetly 'fastdate' or 'bladj")
     cli.parser.add_argument("--select", default='mean', required=False,
                         help="how to summarize ages for inference. ['mean', 'min', 'max', 'random']")
+    cli.parser.add_argument("--rand_resolve", default=False, required=False,
+                        help="randomly resolve polytomies. ['True', False]")
     cli.parser.add_argument("--verbose", action="store_true", help='include meta-data in response')
     OT, args = cli.parse_cli(arg_list)
 
@@ -47,7 +49,8 @@ def main(arg_list, out, list_for_results=None):
                                       output_dir=args.output_dir,
                                       phylo_only=args.phylo_only,
                                       method=args.method,
-                                      select=args.select)
+                                      select=args.select,
+                                      resolve_polytomies=args.rand_resolve)
     elif args.node_ids:
         chronogram.date_synth_subtree(node_ids=args.node_ids,
                                       reps=args.reps,
@@ -55,7 +58,8 @@ def main(arg_list, out, list_for_results=None):
                                       output_dir=args.output_dir,
                                       phylo_only=args.phylo_only,
                                       method=args.method,
-                                      select=args.select)
+                                      select=args.select,
+                                      resolve_polytomies=args.rand_resolve)
     elif args.node_ids_file:
         assert os.path.exists(args.node_ids_file)
         queryfile = open(args.node_ids_file)
@@ -76,7 +80,9 @@ def main(arg_list, out, list_for_results=None):
                                       output_dir=args.output_dir,
                                       phylo_only=args.phylo_only,
                                       grid=args.grid,
-                                      method=args.method)
+                                      method=args.method,
+                                      select=args.select,
+                                      resolve_polytomies=args.rand_resolve)
 
     else:
         sys.stderr("-node_id OR --node_ids OR -node_ids_file are required as an argument")
