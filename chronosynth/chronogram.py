@@ -28,8 +28,8 @@ config = configparser.ConfigParser()
 config.read(chronosynth.configfile)
 
 
-#log = logging.getLogger(__name__)
-#log.debug("logging set to debug")
+log = logging.getLogger(__name__)
+log.debug("logging set to debug")
 
 
 DC = opentree.object_conversion.DendropyConvert()
@@ -547,7 +547,7 @@ def date_synth_subtree(node_id=None,
                        output_dir='Chrono_out',
                        summary='sumtre.tre',
                        phylo_only=False,
-                       reps = 5,
+                       reps = 1,
                        grid=300,
                        select = 'mean',
                        summarize = False,
@@ -580,7 +580,7 @@ def date_synth_subtree(node_id=None,
         sys.stdout.write("Age estimate for root from data: {}\n".format(max_age_est))
     else:
         sys.stderr.write("ERROR: no age estimate for root - please provide max root age using --max_age\n")
-        return None
+        raise Exception("ERROR: no age estimate for subtree root could be found in datastore. Please  re-run query with a max root age using argument 'max_age'\n") 
     sys.stdout.write("Root node is {}, age estimate is  {}\n".format(root_node, max_age_est))
 
     if node_id:
