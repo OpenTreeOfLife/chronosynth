@@ -538,7 +538,53 @@ def prune_to_phylo_only(tree, cache_file_dir=None):
     tree.retain_taxa(taxa_to_retain)
     return tree
 
+def date_custom_synth(custom_synth_tree,
+                      output_dir,
+                      reps,
+                      max_age = None,
+                      method ='bladj',
+                      summarize = False):
+    dp_tree=dendropy.Tree.get(data = custom_synth_tree, schema="newick")
+    tips = [leaf.taxon.label for leaf in dp_tree.leaf_node_iter()]
+    dates = build_synth_node_source_ages(ultrametricity_precision=0.01)
+    root_node = OT.synth_mrca(node_ids=tips).response_dict['mrca']['node_id']
+    if max_age:
+        max_age_est = max_age
+    elif root_node in dates['node_ages']:
+        max_age_est = max([source['age'] for source in dates['node_ages'][root_node]]) * 1.25
+        sys.stdout.write("Age estimate for root from data: {}\n".format(max_age_est))
+    else:
+        sys.stderr.write("ERROR: no age estimate for root - please provide max root age using --max_age\n")
+        raise Exception("ERROR: no age estimate for subtree root could be found in datastore. Please  re-run query with a max root age using argument 'max_age'\n") 
+    sys.stdout.write("Root node is {}, age estimate is  {}\n".format(root_node, max_age_est))
 
+    custom_str = conflict_tree_str(dp_tree)
+    chronograms = find_trees()
+    taxon_sources = find_trees(search_property = "ot:ottId", value=root_node.strip('ott'))
+    input_sources = set(chronograms).intersection(set(taxon_sources))
+    if not os.path.isdir(output_dir):
+        os.mkdir(output_dir)
+    custom_dates = combine_ages_from_sources(input_sources,
+                                             json_out = "{}/node_ages.json".format(output_dir),
+                                             compare_to = custom_str)
+    print("checking mrca")
+
+    outtreesfile, sources = date_tree(dp_tree,
+                                      custom_dates,
+                                      root_node,
+                                      max_age_est,
+                                      method='bladj',
+                                      output_dir=output_dir,
+                                      phylo_only=False,
+                                      reps=reps)
+    return_dict = {'dated_trees_newick_list':[tree.rstrip() for tree in open(outtreesfile).readlines()],
+                   'topology_sources': "User input",
+                   'date_sources':list(sources)}
+    if summarize:
+        summaryfilepath = "{}/{}".format(output_dir, summary)
+        sumtree = summarize_trees(outtreesfile, summaryfilepath)
+        return_dict['summary_tree':sumtree]
+    return return_dict
 
 def date_synth_subtree(node_id=None,
                        node_ids=None,
@@ -616,9 +662,9 @@ def date_tree(subtree,
               output_dir,
               phylo_only,
               reps,
-              resolve_polytomies,
-              grid,
-              select):
+              resolve_polytomies = False,
+              grid = None,
+              select = 'random'):
     sys.stdout.write("{} leaves in tree\n".format(len(subtree)))
     if phylo_only:
         subtree = prune_to_phylo_only(subtree)
@@ -714,6 +760,7 @@ def write_bladj_ages(subtree, dates, root_node, select, root_age, output_dir='.'
     dated_nodes = set()
     undated_nodes = set()
     sources = set()
+    count = 0
     for node in subtree:
         lab = None
         if node.label:
@@ -735,54 +782,19 @@ def write_bladj_ages(subtree, dates, root_node, select, root_age, output_dir='.'
                 if select == 'random':
                     age_est = random.choice(age_range)
                 ages.write("{}\t{}\n".format(node.label, age_est))
+                count += 1
             else:
                 undated_nodes.add(lab)
+    if count <= 2:
+        sys.stderr.write("ERROR: only 2 or fewer age calibrations found for this tree. We have insufficient data to estimate dates.\n")
+        raise Exception("ERROR: only 2 or fewer age calibrations found for this tree. We have insufficient data to estimate dates.\n") 
     cites.write("\n".join(list(sources)))
     cites.close()
     ages.write("{}\t{}\n".format(root_node, root_age))
     ages.close()
     return {'sources':sources, 'outputfile':outputfile}
 
-def date_custom_synth(custom_synth_dir,
-                      method,
-                      output_dir,
-                      summary,
-                      phylo_only,
-                      reps,
-                      grid):
-    dp_tree=dendropy.Tree.get_from_path("{}/labelled_supertree/labelled_supertree.tre".format(custom_synth_dir), schema="newick")
-    tips = [leaf.taxon.label for leaf in dp_tree.leaf_node_iter()]
-    dates = chronogram.build_synth_node_source_ages(ultrametricity_precision=0.01)
-    
-    root_node = OT.synth_mrca(node_ids=tips).response_dict['mrca']['node_id']
-    if max_age:
-        max_age_est = max_age
-    elif root_node in dates['node_ages']:
-        max_age_est = max([source['age'] for source in dates['node_ages'][root_node]]) * 1.25
-        sys.stdout.write("Age estimate for root from data: {}\n".format(max_age_est))
-    else:
-        sys.stderr.write("ERROR: no age estimate for root - please provide max root age using --max_age\n")
-        return None
-    sys.stdout.write("Root node is {}, age estimate is  {}\n".format(root_node, max_age_est))
 
-
-    labeled_tree_str = taxonomy_helpers.conflict_tree_str(dp_tree)
-    conf = OT.conflict_str(labeled_tree_str, 'synth').response_dict
-
-    labeled_dp_tree = dendropy.Tree.get_from_string(labeled_tree_str, schema="newick")
-
-    matched_nodes = {}
-    for node in labeled_dp_tree:
-        if node.label:
-            nid = node.label.strip('_')
-            if nid in conf:
-                node_conf = conf[nid]
-                status = node_conf['status']
-                witness = node_conf['witness']
-                if status == 'supported_by':
-                    matched_nodes[nid] = witness
-                    node.label = witness
-    date_tree()
 
 
 def get_dated_parent_age(ott_ids=None, node_ids=None, root_node=None):
