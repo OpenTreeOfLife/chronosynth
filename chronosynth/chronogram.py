@@ -543,7 +543,8 @@ def date_custom_synth(custom_synth_tree,
                       reps,
                       max_age = None,
                       method ='bladj',
-                      summarize = False):
+                      summarize = False,
+                      select="mean"):
     dp_tree=dendropy.Tree.get(data = custom_synth_tree, schema="newick")
     tips = [leaf.taxon.label for leaf in dp_tree.leaf_node_iter()]
     dates = build_synth_node_source_ages(ultrametricity_precision=0.01)
@@ -576,7 +577,8 @@ def date_custom_synth(custom_synth_tree,
                                       method='bladj',
                                       output_dir=output_dir,
                                       phylo_only=False,
-                                      reps=reps)
+                                      reps=reps,
+                                      select=select)
     return_dict = {'dated_trees_newick_list':[tree.rstrip() for tree in open(outtreesfile).readlines()],
                    'topology_sources': "User input",
                    'date_sources':list(sources)}
@@ -664,7 +666,7 @@ def date_tree(subtree,
               reps,
               resolve_polytomies = False,
               grid = None,
-              select = 'random'):
+              select = 'mean'):
     sys.stdout.write("{} leaves in tree\n".format(len(subtree)))
     if phylo_only:
         subtree = prune_to_phylo_only(subtree)
