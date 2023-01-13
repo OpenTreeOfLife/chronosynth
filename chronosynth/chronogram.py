@@ -745,6 +745,7 @@ def run_bladj(subtree,
                 curr_dir = os.getcwd()
                 os.chdir(output_dir)
                 os.system("phylocom bladj -f  unresolved.tre >> bladj.tre")
+                os.rename("ages", "ages{}".format(i))
                 os.chdir(curr_dir)
         treesfile = "{}/bladj.tre".format(output_dir)
         return treesfile, pr['sources']
