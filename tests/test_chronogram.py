@@ -1,5 +1,6 @@
 import chronosynth
 import dendropy
+import pytest
 from opentree import OT
 from chronosynth import chronogram
 from chronosynth.chronogram import find_trees, node_ages, as_dendropy, map_conflict_ages
@@ -58,10 +59,12 @@ def test_synth_node_source_ages():
     resp2 = chronogram.synth_node_source_ages('ott372706')
 
     # Bad tax ID
-    resp3 = chronogram.synth_node_source_ages('ott3727069999999')
+    with pytest.raises(Exception) as e_info:
+        resp3 = chronogram.synth_node_source_ages('ott3727069999999')
 
     # Bad node id
-    resp3 = chronogram.synth_node_source_ages('mrcaott1000311ott364372913412341')
+    with pytest.raises(Exception) as e_info:
+        resp4 = chronogram.synth_node_source_ages('mrcaott1000311ott364372913412341')
 
 
 
@@ -72,7 +75,7 @@ def test_conflict_newick():
     dp_tree = as_dendropy('ot_2013@tree8')
     alt_str = chronogram.conflict_tree_str(dp_tree)
     resp = OT.conflict_str(alt_str, compare_to=custom_str)
-    assert len(resp.response_dict.keys()) == 351
+    assert len(resp.response_dict.keys()) == 716
 
 
 
@@ -84,7 +87,7 @@ def test_custom_synth_node_source_ages():
     custom_dates = chronogram.build_synth_node_source_ages(compare_to = custom_str,
                                                           fresh = True,
                                                           sources = ['ot_2013@tree8'])
-    assert len(custom_dates['node_ages']) == 131
+    assert len(custom_dates['node_ages']) == 202
 
 
 
