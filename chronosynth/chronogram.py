@@ -78,6 +78,7 @@ def as_dendropy(source_id):
     source_id = 'ot_1000@tree1'
     """
     assert '@' in source_id
+    print(source_id)
     study_id = source_id.split('@')[0]
     tree_id = source_id.split('@')[1]
     study = OT.get_study(study_id)## Todo: catch failure of study GET
@@ -116,7 +117,7 @@ def node_ages(dp_tree,
             assert node.label not in ages.keys()
             ages[node.label] = node.age
     except dendropy.utility.error.UltrametricityError as err:
-        sys.stderr.write("source does not meet ultrametricity_precision threshold of {}".format(ultrametricity_precision))
+        sys.stderr.write("source does not meet ultrametricity_precision threshold of {}\n".format(ultrametricity_precision))
         return None
     ret = {'ages':ages}
     return ret
@@ -549,6 +550,8 @@ def date_custom_synth(custom_synth_tree,
     tips = [leaf.taxon.label for leaf in dp_tree.leaf_node_iter()]
     dates = build_synth_node_source_ages(ultrametricity_precision=0.01)
     root_node = OT.synth_mrca(node_ids=tips).response_dict['mrca']['node_id']
+    ott_ids = [tip.strip('ott') for tip in tips]
+    taxon_mrca = OT.taxon_mrca(ott_ids=ott_ids).response_dict['mrca']['ott_id']
     if max_age:
         max_age_est = max_age
     elif root_node in dates['node_ages']:
@@ -561,7 +564,7 @@ def date_custom_synth(custom_synth_tree,
 
     custom_str = conflict_tree_str(dp_tree)
     chronograms = find_trees()
-    taxon_sources = find_trees(search_property = "ot:ottId", value=root_node.strip('ott'))
+    taxon_sources = find_trees(search_property = "ot:ottId", value=taxon_mrca)
     input_sources = set(chronograms).intersection(set(taxon_sources))
     if not os.path.isdir(output_dir):
         os.mkdir(output_dir)
@@ -662,8 +665,8 @@ def date_tree(subtree,
               max_age_est,
               method,
               output_dir,
-              phylo_only,
-              reps,
+              phylo_only = False,
+              reps = 1,
               resolve_polytomies = False,
               grid = None,
               select = 'mean'):
@@ -687,6 +690,8 @@ def date_tree(subtree,
 
 def summarize_trees(treesfile, summaryfilepath = "sumtre.tre"):
     treelist = dendropy.TreeList.get(path=treesfile, schema='newick')
+    summary_tree = treelist.consensus()
+    summary_tree.write(summaryfilepath, schema = 'newick')
     return(summaryfilepath)
      
 
@@ -771,6 +776,8 @@ def write_bladj_ages(subtree, dates, root_node, select, root_age, output_dir='.'
                 lab = node.label
             elif node.label.startswith('ott'):
                 lab = node.label
+            assert(isinstance(dates, dict))
+            assert(isinstance(dates['node_ages'], dict))
             if lab in dates['node_ages']:
                 dated_nodes.add(lab)
                 sources.update([source['source_id'] for source in dates['node_ages'][lab]])
@@ -788,9 +795,9 @@ def write_bladj_ages(subtree, dates, root_node, select, root_age, output_dir='.'
                 count += 1
             else:
                 undated_nodes.add(lab)
-    if count <= 2:
-        sys.stderr.write("ERROR: only 2 or fewer age calibrations found for this tree. We have insufficient data to estimate dates.\n")
-        raise Exception("ERROR: only 2 or fewer age calibrations found for this tree. We have insufficient data to estimate dates.\n") 
+    #if count <= 2:
+    #    sys.stderr.write("ERROR: only 2 or fewer age calibrations found for this tree. We have insufficient data to estimate dates.\n")
+    #    raise Exception("ERROR: only 2 or fewer age calibrations found for this tree. We have insufficient data to estimate dates.\n") 
     cites.write("\n".join(list(sources)))
     cites.close()
     ages.write("{}\t{}\n".format(root_node, root_age))

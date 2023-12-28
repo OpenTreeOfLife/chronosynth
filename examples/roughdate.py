@@ -17,6 +17,7 @@ source_id = sc[12]
 
 #source = 'pg_61@tree816'
 
+
 source_id = 'pg_2551@tree6180'
 
 maps = chronogram.map_conflict_nodes(source_id)
@@ -24,7 +25,7 @@ cache_file_path = None
 
 if cache_file_path is None:
         cache_file_dir = chronogram.config.get('paths', 'cache_file_dir',
-                                    fallback='/tmp/')
+                                                fallback='/tmp/')
         output_dir = cache_file_dir + '/roughdate/{}'.format(source_id)
 
 
@@ -66,7 +67,7 @@ chronogram.date_tree(maps['tree'],
 ##Set some sort of uniform prior on the root informed by taxonomy?
 ## and We actually have a good estimate on bd_rho!!
 
-#os.system("fastdate --method_nodeprior --tree_file test.tre --prior_file test_prior.txt --out_file node_prior.tre --max_age 100 --bd_rho 1 --show_tree --grid 100")
+os.system("fastdate --method_nodeprior --tree_file test.tre --prior_file test_prior.txt --out_file node_prior.tre --max_age 100 --bd_rho 1 --show_tree --grid 100")
 
 
 ###### Remind self what the calibratrions even meaaaaaannn
