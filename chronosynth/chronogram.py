@@ -12,6 +12,13 @@ import configparser
 import statistics
 import logging
 import copy
+try:
+    from importlib import resources as impresources
+except ImportError:
+    # Try backported to PY<37 `importlib_resources`.
+    import importlib_resources as impresources
+
+from . import resources
 
 from sh import git
 import dendropy
@@ -158,6 +165,8 @@ def map_conflict_ages(source,
                     'tree_id': tree_id,
                     'compare_to': compare_to,
                     'time_unit':time_unit}
+        if time_unit != 'Myr':
+            ret = {'metadata':metadata, 'Error':"not in Myr"}
     elif isinstance(source, dendropy.datamodel.treemodel.Tree):
         dp_tree = source
         metadata = {'source_id':'direct_input',
@@ -174,8 +183,10 @@ def map_conflict_ages(source,
     output_conflict = OT.conflict_str(treestr, compare_to)
     conf = output_conflict.response_dict
     if conf is None:
-        sys.stderr.write("No conflict data available for tree {} \n Check its status at {}\n".format(metadata['source_id'],
-                                                                                                     url))
+        sys.stderr.write("No conflict data available for tree {} \n Check its status at {}\n".format(metadata['source_id'],                                                                                           url))
+        return None
+    if list(conf.keys()) == ['message']:
+        sys.stderr.write("Conflict error - check inputs. {}".format(conf['message']))
         return None
     supported_nodes = {}
     for node_label in ages_data['ages']:
@@ -245,15 +256,17 @@ def conflict_tree_str(inputtree):
     i = 1
     for node in tmp_tree:
         i += 1
+        node.annotations.drop()
         if node.taxon:
             if node.taxon.label.startswith('ott'):
-                pass
+               pass
             else:
                 new_label = "ott{}".format(node.taxon.label)
                 node.taxon.label = new_label
         else:
-            node.label = "{}".format(node.label)
-    return tmp_tree.as_string(schema="newick")
+            if not(node.label.startswith("node")):
+                node.label = "node{}".format(i)
+    return tmp_tree.as_string(schema="newick").strip('[&U] ')
 
 
 
@@ -356,7 +369,7 @@ def build_synth_node_source_ages(compare_to='synth',
                                  cache_file_path=None,
                                  ultrametricity_precision=None,
                                  fresh=False,
-                                 sources='all'):
+                                 sources='standard'):
     """
     This combines all of the input node ages mapped using "map conflict ages".
     Returns a dictionary, and caches the dict in
@@ -387,6 +400,17 @@ f    fresh: Whether to re-map trees to synth and est ages
         cache_file_path = None
     if sources == 'all':
         sources = find_trees()
+    elif sources == 'standard':
+        sources = find_trees()
+        try:
+            exclusion_file = (impresources.files(resources) / 'trees_to_exclude.txt')
+            problematic_chrono = [lin.strip() for lin in open(exclusion_file).readlines()]
+            for source in problematic_chrono:
+                sys.stdout.write("Source {} in 'resources/trees_to_exclude.txt'. Excluding.\n".format(source))
+                sources.remove(source)
+        except AttributeError:
+            sys.stderr.write("Python version greater than 3.9 needed to read resources/trees_to_exclude.txt. Using all trees")
+    assert isinstance(sources, list)
     dates = combine_ages_from_sources(sources,
                                       ultrametricity_precision=ultrametricity_precision,
                                       json_out=cache_file_path,
