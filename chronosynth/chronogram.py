@@ -137,12 +137,14 @@ def map_conflict_ages(source,
                       fresh=False):
     """
     Takes a source id in format study_id@tree_id OR an input tree
-
+    And a compariosn
     returns a dictionary of:
     {'metadata':{'study_id': study_id, 'tree_id': tree_id,
                  'time_unit': time_unit, 'synth_version':version, sha},
     'supported_nodes':{synth_node_id : {'age':age, 'node_label':node_label}}
     """
+    if isinstance(compare_to, dendropy.datamodel.treemodel.Tree):
+        compare_to =  conflict_tree_str(compare_to)
     if compare_to == 'synth':
         if cache_file_path is None:
             cache_file_dir = config.get('paths', 'cache_file_dir',
@@ -263,8 +265,9 @@ def conflict_tree_str(inputtree):
             else:
                 new_label = "ott{}".format(node.taxon.label)
                 node.taxon.label = new_label
+
         else:
-            if not(node.label.startswith("node")):
+            if not(node.label.startswith("node") or node.label.startswith("mrca")):
                 node.label = "node{}".format(i)
     return tmp_tree.as_string(schema="newick").strip('[&U] ')
 
@@ -796,29 +799,28 @@ def write_bladj_ages(subtree, dates, root_node, select, root_age, output_dir='.'
     for node in subtree:
         lab = None
         if node.label:
-            if node.label.startswith('mrca'):
-                lab = node.label
-            elif node.label.startswith('ott'):
-                lab = node.label
-            assert(isinstance(dates, dict))
-            assert(isinstance(dates['node_ages'], dict))
-            if lab in dates['node_ages']:
-                dated_nodes.add(lab)
-                sources.update([source['source_id'] for source in dates['node_ages'][lab]])
-                age_range = [float(source['age']) for source in dates['node_ages'][lab]]
-                age_range.sort()
-                if select == 'mean':
-                    age_est = sum(age_range) / len(age_range) 
-                if select == 'min':
-                    age_est = age_range[0]
-                if select == 'max':
-                    age_est = age_range[-1]
-                if select == 'random':
-                    age_est = random.choice(age_range)
-                ages.write("{}\t{}\n".format(node.label, age_est))
-                count += 1
-            else:
-                undated_nodes.add(lab)
+            lab = node.label
+        elif node.taxon:
+            lab = node.taxon.label
+        assert(isinstance(dates, dict))
+        assert(isinstance(dates['node_ages'], dict))
+        if lab in dates['node_ages']:
+            dated_nodes.add(lab)
+            sources.update([source['source_id'] for source in dates['node_ages'][lab]])
+            age_range = [float(source['age']) for source in dates['node_ages'][lab]]
+            age_range.sort()
+            if select == 'mean':
+                age_est = sum(age_range) / len(age_range) 
+            if select == 'min':
+                age_est = age_range[0]
+            if select == 'max':
+                age_est = age_range[-1]
+            if select == 'random':
+                age_est = random.choice(age_range)
+            ages.write("{}\t{}\n".format(node.label, age_est))
+            count += 1
+        else:
+            undated_nodes.add(lab)
     #if count <= 2:
     #    sys.stderr.write("ERROR: only 2 or fewer age calibrations found for this tree. We have insufficient data to estimate dates.\n")
     #    raise Exception("ERROR: only 2 or fewer age calibrations found for this tree. We have insufficient data to estimate dates.\n") 
