@@ -165,14 +165,14 @@ def map_conflict_ages(source,
         metadata = {'source_id':source_id,
                     'study_id': study_id,
                     'tree_id': tree_id,
-                    'compare_to': compare_to,
+#                    'compare_to': compare_to,
                     'time_unit':time_unit}
         if time_unit != 'Myr':
             ret = {'metadata':metadata, 'Error':"not in Myr"}
     elif isinstance(source, dendropy.datamodel.treemodel.Tree):
         dp_tree = source
         metadata = {'source_id':'direct_input',
-                    'compare_to': compare_to, 
+#                    'compare_to': compare_to, 
                     'time_unit':time_unit}
     ages_data = node_ages(dp_tree,
                           ultrametricity_precision=ultrametricity_precision)
@@ -182,8 +182,8 @@ def map_conflict_ages(source,
     metadata['synth_tree_about'] = version['synth_tree_about']
     treestr = conflict_tree_str(dp_tree)
     if isinstance(compare_to, dendropy.datamodel.treemodel.Tree):
-        compare_to =  conflict_tree_str(compare_to)
-        output_conflict = OT.conflict_str(treestr, compare_to)
+        compare_to_str =  conflict_tree_str(compare_to)
+        output_conflict = OT.conflict_str(treestr, compare_to_str)
     else:
         output_conflict = OT.conflict_str(treestr, compare_to)
     conf = output_conflict.response_dict
@@ -206,8 +206,12 @@ def map_conflict_ages(source,
         dated_tree_tips = [tip.taxon.label for tip in dp_tree.leaf_node_iter()]
         comparison_tips = [tip.taxon.label for tip in comp_tree.leaf_node_iter() if tip.taxon.label.strip('ott') in dated_tree_tips]
         root_node_map = comp_tree.mrca(taxon_labels = comparison_tips)
-        comparison_tips_ott = ["ott" + tip for tip in comparison_tips]
-        matched_root = dp_tree.mrca(taxon_labels = comparison_tips_ott)
+        comparison_tips_dated = [tip.strip("ott") for tip in comparison_tips]
+        taxa = []
+        for label in comparison_tips_dated:
+            node = dp_tree.find_node_with_taxon_label(label)
+            taxa.append(node.taxon)
+        matched_root = dp_tree.mrca(taxa = taxa)
         conf[matched_root] = {'status': 'supported_by', 'witness': root_node_map.label}
     supported_nodes = {}
     for node_label in ages_data['ages']:
