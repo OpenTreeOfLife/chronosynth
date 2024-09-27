@@ -191,6 +191,21 @@ def map_conflict_ages(source,
     if list(conf.keys()) == ['message']:
         sys.stderr.write("Conflict error - check inputs. {}".format(conf['message']))
         return None
+    root = dp_tree.seed_node.label
+    if compare_to == 'synth':
+        leaves = [tax for tax in conf.keys() if tax.startswith('ott')]
+        root_node_map = OT.synth_mrca(node_ids = leaves).response_dict
+        conf[root] = {'status': 'supported_by', 'witness': root_node_map['mrca']['node_id']}
+    else:
+        if isinstance(compare_to, str):
+            comp_tree = dendropy.Tree.get(data=compare_to, schema="Newick")
+        elif isinstance(compare_to, dendropy.datamodel.treemodel.Tree):
+            comp_tree = compare_to
+        dated_tree_tips = [tip.taxon.label for tip in dp_tree.leaf_node_iter()]
+        comparison_tips = [tip.taxon.label for tip in comp_tree.leaf_node_iter() if tip.taxon.label.strip('ott') in dated_tree_tips]
+        root_node_map = comp_tree.mrca(taxon_labels = comparison_tips)
+        print("Root maps to {}".format(root_node_map.label))
+        conf[root] = {'status': 'supported_by', 'witness': root_node_map.label}
     supported_nodes = {}
     for node_label in ages_data['ages']:
         age = ages_data['ages'][node_label]
@@ -281,7 +296,7 @@ def conflict_tree_str(inputtree):
                 new_label = "ott{}".format(node.taxon.label)
                 node.taxon.label = new_label
         else:
-            if not(node.label.startswith("node") or node.label.startswith("mrca")):
+            if not(node.label.startswith("node") or node.label.startswith("mrca") or node.label.startswith("ott")):
                 node.label = "node{}".format(i)
     return tmp_tree.as_string(schema="newick").strip('[&U] ')
 
