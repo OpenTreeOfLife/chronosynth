@@ -143,8 +143,8 @@ def map_conflict_ages(source,
                  'time_unit': time_unit, 'synth_version':version, sha},
     'supported_nodes':{synth_node_id : {'age':age, 'node_label':node_label}}
     """
-    if isinstance(compare_to, dendropy.datamodel.treemodel.Tree):
-        compare_to =  conflict_tree_str(compare_to)
+    #if isinstance(compare_to, dendropy.datamodel.treemodel.Tree):
+    #    compare_to =  conflict_tree_str(compare_to)
     if compare_to == 'synth':
         if cache_file_path is None:
             cache_file_dir = config.get('paths', 'cache_file_dir',
@@ -174,16 +174,18 @@ def map_conflict_ages(source,
         metadata = {'source_id':'direct_input',
                     'compare_to': compare_to, 
                     'time_unit':time_unit}
-
     ages_data = node_ages(dp_tree,
                           ultrametricity_precision=ultrametricity_precision)
     if ages_data is None:
         return None
     version = OT.about()
     metadata['synth_tree_about'] = version['synth_tree_about']
-
     treestr = conflict_tree_str(dp_tree)
-    output_conflict = OT.conflict_str(treestr, compare_to)
+    if isinstance(compare_to, dendropy.datamodel.treemodel.Tree):
+        compare_to =  conflict_tree_str(compare_to)
+        output_conflict = OT.conflict_str(treestr, compare_to)
+    else:
+        output_conflict = OT.conflict_str(treestr, compare_to)
     conf = output_conflict.response_dict
     if conf is None:
         sys.stderr.write("No conflict data available for tree {} \n Check its status at {}\n".format(metadata['source_id'],                                                                                           url))
@@ -191,8 +193,8 @@ def map_conflict_ages(source,
     if list(conf.keys()) == ['message']:
         sys.stderr.write("Conflict error - check inputs. {}".format(conf['message']))
         return None
-    root = dp_tree.seed_node.label
     if compare_to == 'synth':
+        root = dp_tree.seed_node.label
         leaves = [tax for tax in conf.keys() if tax.startswith('ott')]
         root_node_map = OT.synth_mrca(node_ids = leaves).response_dict
         conf[root] = {'status': 'supported_by', 'witness': root_node_map['mrca']['node_id']}
@@ -204,8 +206,9 @@ def map_conflict_ages(source,
         dated_tree_tips = [tip.taxon.label for tip in dp_tree.leaf_node_iter()]
         comparison_tips = [tip.taxon.label for tip in comp_tree.leaf_node_iter() if tip.taxon.label.strip('ott') in dated_tree_tips]
         root_node_map = comp_tree.mrca(taxon_labels = comparison_tips)
-        print("Root maps to {}".format(root_node_map.label))
-        conf[root] = {'status': 'supported_by', 'witness': root_node_map.label}
+        comparison_tips_ott = ["ott" + tip for tip in comparison_tips]
+        matched_root = dp_tree.mrca(taxon_labels = comparison_tips_ott)
+        conf[matched_root] = {'status': 'supported_by', 'witness': root_node_map.label}
     supported_nodes = {}
     for node_label in ages_data['ages']:
         age = ages_data['ages'][node_label]
@@ -230,55 +233,55 @@ def map_conflict_ages(source,
 
 
 
-def map_conflict_nodes(source, compare_to='synth'):
-    """
-    Takes a source id in format study_id@tree_id OR a dendropy tree
+# def map_conflict_nodes(source, compare_to='synth'):
+#     """
+#     Takes a source id in format study_id@tree_id OR a dendropy tree
 
-    returns a dictionary of:
-    {
-    'matched_nodes':{node_id : synnode_label}}
-    }
-    """
-    if isinstance(source, str):
-        source_id = source
-        study_id = source_id.split('@')[0]
-        tree_id = source_id.split('@')[1]
-        dp_tree = as_dendropy(source_id)
-        metadata = {'source_id':source_id,'study_id': study_id, 'tree_id': tree_id, 'compare_to': compare_to}
-    elif isinstance(source, dendropy.datamodel.treemodel.Tree):
-        dp_tree = source
-        metadata = {'source_id':'direct_input', 'compare_to': compare_to}
-    time_unit = dp_tree.annotations.get_value("branchLengthTimeUnit")
-    treestr = conflict_tree_str(dp_tree)
-    output_conflict = OT.conflict_str(treestr, compare_to)
-    conf = output_conflict.response_dict
-    if conf is None:
-        sys.stderr.write("No conflict data available for tree {} \n Check its status at {}\n".format(source_id, url))
-        return None
-    root = dp_tree.seed_node.label
-    if compare_to == 'synth':
-        leaves = [tax for tax in conf.keys() if tax.startswith('ott')]
-        root_node_map = OT.synth_mrca(node_ids = leaves).response_dict
-        conf[root] = {'status': 'supported_by', 'witness': root_node_map['mrca']['node_id']}
-    else:
-        if isinstance(compare_to, string):
-            comp_tree = dendropy.Tree.get(data=compare_to, schema="Newick")
-        elif isinstance(compare_to, dendropy.datamodel.treemodel.Tree):
-            comp_tree = compare_to
-        dated_tree_tips = [tip.taxon.label for tip in dp_tree.leaf_node_iter()]
-        comparison_tips = [tip.taxon.label for tip in comp_tree.leaf_node_iter() if tip.taxon.label.strip('ott') in dated_tree_tips]
-        root_node_map = comp_tree.mrca(taxon_labels = comparison_tips)
-        conf[root] = {'status': 'supported_by', 'witness': root_node_map.label}
-    matched_nodes = {}
-    for node in dp_tree:
-        if node.label in conf:
-            node_conf = conf[node.label]
-            status = node_conf['status']
-            witness = node_conf['witness']
-            if status == 'supported_by':
-                matched_nodes[node.label] = witness
-    ret = {'metadata':metadata, 'matched_nodes':matched_nodes, 'tree':dp_tree}
-    return ret
+#     returns a dictionary of:
+#     {
+#     'matched_nodes':{node_id : synnode_label}}
+#     }
+#     """
+#     if isinstance(source, str):
+#         source_id = source
+#         study_id = source_id.split('@')[0]
+#         tree_id = source_id.split('@')[1]
+#         dp_tree = as_dendropy(source_id)
+#         metadata = {'source_id':source_id,'study_id': study_id, 'tree_id': tree_id, 'compare_to': compare_to}
+#     elif isinstance(source, dendropy.datamodel.treemodel.Tree):
+#         dp_tree = source
+#         metadata = {'source_id':'direct_input', 'compare_to': compare_to}
+#     time_unit = dp_tree.annotations.get_value("branchLengthTimeUnit")
+#     treestr = conflict_tree_str(dp_tree)
+#     output_conflict = OT.conflict_str(treestr, compare_to)
+#     conf = output_conflict.response_dict
+#     if conf is None:
+#         sys.stderr.write("No conflict data available for tree {} \n Check its status at {}\n".format(source_id, url))
+#         return None
+#     root = dp_tree.seed_node.label
+#     if compare_to == 'synth':
+#         leaves = [tax for tax in conf.keys() if tax.startswith('ott')]
+#         root_node_map = OT.synth_mrca(node_ids = leaves).response_dict
+#         conf[root] = {'status': 'supported_by', 'witness': root_node_map['mrca']['node_id']}
+#     else:
+#         if isinstance(compare_to, string):
+#             comp_tree = dendropy.Tree.get(data=compare_to, schema="Newick")
+#         elif isinstance(compare_to, dendropy.datamodel.treemodel.Tree):
+#             comp_tree = compare_to
+#         dated_tree_tips = [tip.taxon.label for tip in dp_tree.leaf_node_iter()]
+#         comparison_tips = [tip.taxon.label for tip in comp_tree.leaf_node_iter() if tip.taxon.label.strip('ott') in dated_tree_tips]
+#         root_node_map = comp_tree.mrca(taxon_labels = comparison_tips)
+#         conf[root] = {'status': 'supported_by', 'witness': root_node_map.label}
+#     matched_nodes = {}
+#     for node in dp_tree:
+#         if node.label in conf:
+#             node_conf = conf[node.label]
+#             status = node_conf['status']
+#             witness = node_conf['witness']
+#             if status == 'supported_by':
+#                 matched_nodes[node.label] = witness
+#     ret = {'metadata':metadata, 'matched_nodes':matched_nodes, 'tree':dp_tree}
+#     return ret
 
 
 def conflict_tree_str(inputtree):
