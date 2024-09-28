@@ -212,7 +212,7 @@ def map_conflict_ages(source,
             node = dp_tree.find_node_with_taxon_label(label)
             taxa.append(node.taxon)
         matched_root = dp_tree.mrca(taxa = taxa)
-        conf[matched_root] = {'status': 'supported_by', 'witness': root_node_map.label}
+        conf[matched_root.label] = {'status': 'supported_by', 'witness': root_node_map.label}
     supported_nodes = {}
     for node_label in ages_data['ages']:
         age = ages_data['ages'][node_label]
@@ -802,8 +802,9 @@ def run_bladj(subtree,
         subtree.write(path= undated_treefile, schema="newick")
         for i in range(int(reps)):
             if resolve_polytomies:
+                subtree =  dendropy.Tree.get_from_path(undated_treefile, schema="newick")
                 undated_rand_resolve_treefile = "{}/resolved{}.tre".format(output_dir, i)
-                subtree.resolve_polytomies()
+                subtree.resolve_polytomies(rng = random)
                 subtree.write(path= undated_rand_resolve_treefile, schema="newick")
                 pr = write_bladj_ages(subtree, dates, root_node, select, root_age=max_age_est, output_dir=output_dir)
                 curr_dir = os.getcwd()
