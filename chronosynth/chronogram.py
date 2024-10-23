@@ -853,7 +853,15 @@ def write_bladj_ages(subtree, dates, root_node, select, root_age, output_dir='.'
             if select == 'max':
                 age_est = age_range[-1]
             if select == 'random':
-                age_est = random.choice(age_range)
+                if len(age_range) == 1:
+                    keep = random.choice([True, False]) #So that that date isn't in every single iteration
+                    if keep:
+                        age_est = age_range[0]
+                    else:
+                        dated_nodes.remove(lab)
+                        continue
+                else:
+                    age_est = random.choice(age_range)
             ages.write("{}\t{}\n".format(node.label, age_est))
             count += 1
         else:
