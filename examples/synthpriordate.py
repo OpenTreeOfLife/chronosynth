@@ -64,7 +64,7 @@ def main(arg_list, out, list_for_results=None):
         assert os.path.exists(args.node_ids_file)
         queryfile = open(args.node_ids_file)
         header = queryfile.readline()
-        assert header.split(',')[0] == 'ott_id'
+        assert header.split(',')[0].strip() == 'ott_id'
         ott_ids=set()
         for lin in queryfile.readlines():
             lii = lin.split(',')
