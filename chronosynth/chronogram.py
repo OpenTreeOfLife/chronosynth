@@ -446,7 +446,10 @@ f    fresh: Whether to re-map trees to synth and est ages
             problematic_chrono = [lin.strip() for lin in open(exclusion_file).readlines()]
             for source in problematic_chrono:
                 sys.stdout.write("Source {} in 'resources/trees_to_exclude.txt'. Excluding.\n".format(source))
-                sources.remove(source)
+                try:
+                    sources.remove(source)
+                except:
+                    pass
         except AttributeError:
             sys.stderr.write("Python version greater than 3.9 needed to read resources/trees_to_exclude.txt. Using all trees")
     assert isinstance(sources, list)
