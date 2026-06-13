@@ -11,5 +11,5 @@ setup(name='chronosynth',
       author='Luna Luisa Sanchez Reyes, Emily Jane McTavish',
       author_email='ejmctavish@gmail.com',
       packages=['chronosynth'],
-      install_requires=['opentree']
+      install_requires=['opentree', 'peyotl', 'sh', 'dendropy']
      )
