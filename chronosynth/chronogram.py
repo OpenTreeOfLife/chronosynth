@@ -93,6 +93,7 @@ def as_dendropy(source_id):
     tree_obj = DC.tree_from_nexson(study_nexson, tree_id, label_format="ot:ottId")
     for tip in tree_obj.leaf_node_iter():
         tip.taxon.label = str(tip.taxon.label)
+    tree_obj.is_rooted = True
     return tree_obj
 
 def node_ages(dp_tree,
@@ -305,7 +306,13 @@ def conflict_tree_str(inputtree):
         else:
             if not(node.label.startswith("node") or node.label.startswith("mrca") or node.label.startswith("ott")):
                 node.label = "node{}".format(i)
-    return tmp_tree.as_string(schema="newick").strip('[&U] ')
+    clean = tmp_tree.as_string(schema="newick")
+    clean = clean.lstrip('[&U] ')
+    clean = clean.lstrip('[&R] ')
+    clean = clean.rstrip('\n')
+    assert clean.startswith("(")
+    assert clean[-1:]==";"
+    return clean
 
 
 
