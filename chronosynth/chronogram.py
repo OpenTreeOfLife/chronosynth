@@ -1,5 +1,6 @@
-"""Functions for working with chronograms from Phylesystem"""
 #!/usr/bin/env python3
+"""Functions for working with chronograms from Phylesystem"""
+
 import sys
 import os
 import datetime
@@ -10,6 +11,14 @@ import random
 import configparser
 import statistics
 import logging
+import copy
+try:
+    from importlib import resources as impresources
+except ImportError:
+    # Try backported to PY<37 `importlib_resources`.
+    import importlib_resources as impresources
+
+from . import resources
 
 from sh import git
 import dendropy
@@ -47,7 +56,7 @@ def set_prod():
 def print_endpoint():
     """Print endpoint"""
     print(OT._api_endpoint)
-    log.debug("api_endpoint is %s", format(OT._api_endpoint))
+#    log.debug("api_endpoint is %s", format(OT._api_endpoint))
 
 def find_trees(search_property="ot:branchLengthMode", value="ot:time"):
     """
@@ -76,14 +85,18 @@ def as_dendropy(source_id):
     source_id = 'ot_1000@tree1'
     """
     assert '@' in source_id
+    print(source_id)
     study_id = source_id.split('@')[0]
     tree_id = source_id.split('@')[1]
     study = OT.get_study(study_id)## Todo: catch failure of study GET
     study_nexson = study.response_dict['data']
-    tree_obj = DC.tree_from_nexson(study_nexson, tree_id)
+    tree_obj = DC.tree_from_nexson(study_nexson, tree_id, label_format="ot:ottId")
+    for tip in tree_obj.leaf_node_iter():
+        tip.taxon.label = str(tip.taxon.label)
     return tree_obj
 
-def node_ages(source_id, ultrametricity_precision=None):
+def node_ages(dp_tree,
+              ultrametricity_precision=None):
     """
     Get node ages for a DendroPy tree object.
     Inputs
@@ -102,13 +115,8 @@ def node_ages(source_id, ultrametricity_precision=None):
     if ultrametricity_precision is None:
         ultrametricity_precision = float(config.get('params', 'ultrametricity_precision',
                                                     fallback='0.01'))
-
-    study_id = source_id.split('@')[0]
-    tree_id = source_id.split('@')[1]
-    dp_tree = as_dendropy(source_id)
     assert dp_tree.annotations.get_value("branchLengthMode") == 'ot:time'
     time_unit = dp_tree.annotations.get_value("branchLengthTimeUnit")
-    metadata = {'study_id': study_id, 'tree_id': tree_id, 'time_unit' :time_unit}
     ages = {}
     try:
         dp_tree.internal_node_ages(ultrametricity_precision=ultrametricity_precision)
@@ -116,48 +124,95 @@ def node_ages(source_id, ultrametricity_precision=None):
             assert node.label not in ages.keys()
             ages[node.label] = node.age
     except dendropy.utility.error.UltrametricityError as err:
-        sys.stderr.write("source {} does not meet ultrametricity_precision threshold of {}".format(source_id, ultrametricity_precision))
+        sys.stderr.write("source does not meet ultrametricity_precision threshold of {}\n".format(ultrametricity_precision))
         return None
-    ret = {'metadata':metadata, 'ages':ages}
+    ret = {'ages':ages}
     return ret
 
 
-def map_conflict_ages(source_id,
+def map_conflict_ages(source,
+                      compare_to="synth",
                       ultrametricity_precision=None,
-#                      repo_dir=None, ##ToDo run locally....
                       cache_file_path=None,
                       fresh=False):
     """
-    Takes a source id in format study_id@tree_id
-
+    Takes a source id in format study_id@tree_id OR an input tree
+    And a compariosn
     returns a dictionary of:
     {'metadata':{'study_id': study_id, 'tree_id': tree_id,
                  'time_unit': time_unit, 'synth_version':version, sha},
     'supported_nodes':{synth_node_id : {'age':age, 'node_label':node_label}}
     """
-    if cache_file_path is None:
-        cache_file_dir = config.get('paths', 'cache_file_dir',
-                                    fallback='/tmp/')
-        cache_file_path = cache_file_dir + '/{}.json'.format(source_id)
-    if os.path.exists(cache_file_path) and fresh == False:
-        sys.stdout.write("Loading" + cache_file_path + "\n")
-        ret = json.load(open(cache_file_path))
-        return ret
-    ages_data = node_ages(source_id, ultrametricity_precision=ultrametricity_precision)
+    #if isinstance(compare_to, dendropy.datamodel.treemodel.Tree):
+    #    compare_to =  conflict_tree_str(compare_to)
+    if compare_to == 'synth':
+        if cache_file_path is None:
+            cache_file_dir = config.get('paths', 'cache_file_dir',
+                                        fallback='/tmp/')
+            cache_file_path = cache_file_dir + '/{}.json'.format(source)
+        if os.path.exists(cache_file_path) and fresh == False:
+            sys.stdout.write("Loading" + cache_file_path + "\n")
+            ret = json.load(open(cache_file_path))
+            return ret
+    else:
+        cache_file_path = None
+    if isinstance(source, str):
+        source_id = source
+        study_id = source_id.split('@')[0]
+        tree_id = source_id.split('@')[1]
+        dp_tree = as_dendropy(source_id)
+        time_unit = dp_tree.annotations.get_value("branchLengthTimeUnit")
+        metadata = {'source_id':source_id,
+                    'study_id': study_id,
+                    'tree_id': tree_id,
+#                    'compare_to': compare_to,
+                    'time_unit':time_unit}
+        if time_unit != 'Myr':
+            ret = {'metadata':metadata, 'Error':"not in Myr"}
+    elif isinstance(source, dendropy.datamodel.treemodel.Tree):
+        dp_tree = source
+        metadata = {'source_id':'direct_input',
+#                    'compare_to': compare_to, 
+                    'time_unit':time_unit}
+    ages_data = node_ages(dp_tree,
+                          ultrametricity_precision=ultrametricity_precision)
     if ages_data is None:
         return None
-    metadata = ages_data['metadata']
     version = OT.about()
     metadata['synth_tree_about'] = version['synth_tree_about']
-    output_conflict = OT.conflict_info(study_id=metadata['study_id'],
-                                       tree_id=metadata['tree_id'])
+    treestr = conflict_tree_str(dp_tree)
+    if isinstance(compare_to, dendropy.datamodel.treemodel.Tree):
+        compare_to_str =  conflict_tree_str(compare_to)
+        output_conflict = OT.conflict_str(treestr, compare_to_str)
+    else:
+        output_conflict = OT.conflict_str(treestr, compare_to)
     conf = output_conflict.response_dict
     if conf is None:
-        url = "https://tree.opentreeoflife.org/curator/study/view/{}/?tab=home&tree={}".format(metadata['study_id'],
-                                                                                               metadata['tree_id'])
-        sys.stderr.write("No conflict data available for tree {} \n Check its status at {}\n".format(source_id,
-                                                                                                     url))
+        sys.stderr.write("No conflict data available for tree {} \n Check its status at {}\n".format(metadata['source_id'],                                                                                           url))
         return None
+    if list(conf.keys()) == ['message']:
+        sys.stderr.write("Conflict error - check inputs. {}".format(conf['message']))
+        return None
+    if compare_to == 'synth':
+        root = dp_tree.seed_node.label
+        leaves = [tax for tax in conf.keys() if tax.startswith('ott')]
+        root_node_map = OT.synth_mrca(node_ids = leaves).response_dict
+        conf[root] = {'status': 'supported_by', 'witness': root_node_map['mrca']['node_id']}
+    else:
+        if isinstance(compare_to, str):
+            comp_tree = dendropy.Tree.get(data=compare_to, schema="Newick")
+        elif isinstance(compare_to, dendropy.datamodel.treemodel.Tree):
+            comp_tree = compare_to
+        dated_tree_tips = [tip.taxon.label for tip in dp_tree.leaf_node_iter()]
+        comparison_tips = [tip.taxon.label for tip in comp_tree.leaf_node_iter() if tip.taxon.label.strip('ott') in dated_tree_tips]
+        root_node_map = comp_tree.mrca(taxon_labels = comparison_tips)
+        comparison_tips_dated = [tip.strip("ott") for tip in comparison_tips]
+        taxa = []
+        for label in comparison_tips_dated:
+            node = dp_tree.find_node_with_taxon_label(label)
+            taxa.append(node.taxon)
+        matched_root = dp_tree.mrca(taxa = taxa)
+        conf[matched_root.label] = {'status': 'supported_by', 'witness': root_node_map.label}
     supported_nodes = {}
     for node_label in ages_data['ages']:
         age = ages_data['ages'][node_label]
@@ -174,48 +229,88 @@ def map_conflict_ages(source_id,
             supported_nodes[witness] = {'age':age, 'node_label':node_label}
     ret = {'metadata':metadata, 'supported_nodes':supported_nodes}
     sf = json.dumps(ret, sort_keys=True, indent=2, separators=(',', ': '), ensure_ascii=True)
-    ofi = open(cache_file_path, 'w')
-    ofi.write(sf)
-    ofi.close()
+    if cache_file_path:
+        ofi = open(cache_file_path, 'w')
+        ofi.write(sf)
+        ofi.close()
     return ret
 
 
-def map_conflict_nodes(source_id):
-    """
-    Takes a source id in format study_id@tree_id
 
-    returns a dictionary of:
-    {
-    'matched_nodes':{node_id : synnode_label}}
-    }
+# def map_conflict_nodes(source, compare_to='synth'):
+#     """
+#     Takes a source id in format study_id@tree_id OR a dendropy tree
+
+#     returns a dictionary of:
+#     {
+#     'matched_nodes':{node_id : synnode_label}}
+#     }
+#     """
+#     if isinstance(source, str):
+#         source_id = source
+#         study_id = source_id.split('@')[0]
+#         tree_id = source_id.split('@')[1]
+#         dp_tree = as_dendropy(source_id)
+#         metadata = {'source_id':source_id,'study_id': study_id, 'tree_id': tree_id, 'compare_to': compare_to}
+#     elif isinstance(source, dendropy.datamodel.treemodel.Tree):
+#         dp_tree = source
+#         metadata = {'source_id':'direct_input', 'compare_to': compare_to}
+#     time_unit = dp_tree.annotations.get_value("branchLengthTimeUnit")
+#     treestr = conflict_tree_str(dp_tree)
+#     output_conflict = OT.conflict_str(treestr, compare_to)
+#     conf = output_conflict.response_dict
+#     if conf is None:
+#         sys.stderr.write("No conflict data available for tree {} \n Check its status at {}\n".format(source_id, url))
+#         return None
+#     root = dp_tree.seed_node.label
+#     if compare_to == 'synth':
+#         leaves = [tax for tax in conf.keys() if tax.startswith('ott')]
+#         root_node_map = OT.synth_mrca(node_ids = leaves).response_dict
+#         conf[root] = {'status': 'supported_by', 'witness': root_node_map['mrca']['node_id']}
+#     else:
+#         if isinstance(compare_to, string):
+#             comp_tree = dendropy.Tree.get(data=compare_to, schema="Newick")
+#         elif isinstance(compare_to, dendropy.datamodel.treemodel.Tree):
+#             comp_tree = compare_to
+#         dated_tree_tips = [tip.taxon.label for tip in dp_tree.leaf_node_iter()]
+#         comparison_tips = [tip.taxon.label for tip in comp_tree.leaf_node_iter() if tip.taxon.label.strip('ott') in dated_tree_tips]
+#         root_node_map = comp_tree.mrca(taxon_labels = comparison_tips)
+#         conf[root] = {'status': 'supported_by', 'witness': root_node_map.label}
+#     matched_nodes = {}
+#     for node in dp_tree:
+#         if node.label in conf:
+#             node_conf = conf[node.label]
+#             status = node_conf['status']
+#             witness = node_conf['witness']
+#             if status == 'supported_by':
+#                 matched_nodes[node.label] = witness
+#     ret = {'metadata':metadata, 'matched_nodes':matched_nodes, 'tree':dp_tree}
+#     return ret
+
+
+def conflict_tree_str(inputtree):
+    """Write out a tree with labels that work for the OpenTree Conflict API
     """
-    study_id = source_id.split('@')[0]
-    tree_id = source_id.split('@')[1]
-    dp_tree = as_dendropy(source_id)
-    time_unit = dp_tree.annotations.get_value("branchLengthTimeUnit")
-    assert time_unit == "Mya"
-    metadata = {'study_id': study_id, 'tree_id': tree_id}
-    output_conflict = OT.conflict_info(study_id, tree_id)
-    conf = output_conflict.response_dict
-    if conf is None:
-        url = "https://tree.opentreeoflife.org/curator/study/view/{}/?tab=home&tree={}".format(metadata['study_id'],
-                                                                                               metadata['tree_id'])
-        sys.stderr.write("No conflict data available for tree {} \n Check its status at {}\n".format(source_id, url))
-        return None
-    matched_nodes = {}
-    for node in dp_tree:
-        if node.label in conf:
-            node_conf = conf[node.label]
-            status = node_conf['status']
-            witness = node_conf['witness']
-            if status == 'supported_by':
-                matched_nodes[node.label] = witness
-    ret = {'metadata':metadata, 'matched_nodes':matched_nodes, 'tree':dp_tree}
-    return ret
+    tmp_tree = copy.deepcopy(inputtree)
+    i = 1
+    for node in tmp_tree:
+        i += 1
+        node.annotations.drop()
+        if node.taxon:
+            if node.taxon.label.startswith('ott'):
+               pass
+            else:
+                new_label = "ott{}".format(node.taxon.label)
+                node.taxon.label = new_label
+        else:
+            if not(node.label.startswith("node") or node.label.startswith("mrca") or node.label.startswith("ott")):
+                node.label = "node{}".format(i)
+    return tmp_tree.as_string(schema="newick").strip('[&U] ')
 
 
 
 def combine_ages_from_sources(source_ids,
+                              compare_to = 'synth',
                               ultrametricity_precision=None,
                               json_out=None,
                               fresh=False):
@@ -251,13 +346,17 @@ def combine_ages_from_sources(source_ids,
     synth_node_ages['metadata']['phylesystem_sha'] = get_phylesystem_sha()
     for tag in source_ids:
         try:
-            res = map_conflict_ages(tag, ultrametricity_precision=ultrametricity_precision, fresh=fresh)
+            res = map_conflict_ages(tag,
+                                    compare_to = compare_to,
+                                    ultrametricity_precision=ultrametricity_precision,
+                                    fresh=fresh)
         except ValueError:
 #            time_unit = res['metadata']['time_unit']
-            log.info('{}, conflict error\n'.format(tag))
+         #   log.info('{}, conflict error\n'.format(tag))
             continue
         if res is None:
-            log.info('{}, conflict empty\n'.format(tag))
+ #           log.info('{}, conflict empty\n'.format(tag))
+             pass
         else:
             sys.stdout.write("study {} has {} supported nodes\n".format(tag, len(res["supported_nodes"])))
             source_id = tag
@@ -305,7 +404,11 @@ def pull_phylesystem(repo_dir, repo_url="https://github.com/OpenTreeOfLife/phyle
     git(git_dir_arg, 'pull', repo_url)
 
 
-def build_synth_node_source_ages(cache_file_path=None, ultrametricity_precision=None, repo_dir=None, fresh=False):
+def build_synth_node_source_ages(compare_to='synth',
+                                 cache_file_path=None,
+                                 ultrametricity_precision=None,
+                                 fresh=False,
+                                 sources='standard'):
     """
     This combines all of the input node ages mapped using "map conflict ages".
     Returns a dictionary, and caches the dict in
@@ -314,57 +417,52 @@ def build_synth_node_source_ages(cache_file_path=None, ultrametricity_precision=
                             Defaults to node_ages.json, dir set in config,
                             or defaults /tmp/node_ages.json
     ultrametricity_precision: a float passed to dendropy
-    repo_dir: a local clone of phylesystem. Defaults to None, and uses remote
-    fresh: Whether to re-map trees to synth and est ages
+f    fresh: Whether to re-map trees to synth and est ages
     """
-    if cache_file_path is None:
-        cache_file_dir = config.get('paths', 'cache_file_dir',
-                                    fallback='/tmp/')
-        cache_file_path = cache_file_dir + '/node_ages.json'
-    sources = find_trees()
-    if os.path.exists(cache_file_path) and fresh == False:
-        dates = json.load(open(cache_file_path))
-        current_sha = get_phylesystem_sha(repo_dir=repo_dir)
-        cached_sha = dates['metadata'].get('phylesystem_sha')
-        if cached_sha == current_sha:
-            sys.stdout.write("No new changes to phylesystem, using cached dates at {}\n".format(cache_file_path))
-            return dates
-        if cached_sha != current_sha:
-            if repo_dir:
-                repo = PhylesystemGitAction(repo=repo_dir)
-                changed_studies = repo.get_changed_docs(cached_sha)
-                sys.stdout.write("Mapping changed studies")
-                ## Re-est conflict and BL's for changed studies
-                changed_trees = [source for source in sources if source.split('@') in changed_studies]
-                for source_id in changed_trees:
-                    map_conflict_ages(source_id,
-                                      ultrametricity_precision=ultrametricity_precision,
-                                      repo_dir=repo_dir,
-                                      fresh=True)
-            else:
+    if compare_to =='synth':
+        if cache_file_path is None:
+            cache_file_dir = config.get('paths', 'cache_file_dir',
+                                        fallback='/tmp/')
+            cache_file_path = cache_file_dir + '/node_ages.json'
+        if os.path.exists(cache_file_path) and fresh == False:
+            dates = json.load(open(cache_file_path))
+            current_sha = get_phylesystem_sha()
+            cached_sha = dates['metadata'].get('phylesystem_sha')
+            if cached_sha == current_sha:
+                sys.stdout.write("No new changes to phylesystem, using cached dates at {}\n".format(cache_file_path))
+                return dates
+            if cached_sha != current_sha:
                 sys.stdout.write("Phylesystem has changed since dates were cached, reloading and saving to {}\n".format(cache_file_path))
+        else:
+            sys.stdout.write("No date cache found. Loading dates and saving to {}\n".format(cache_file_path))
     else:
-        sys.stdout.write("No date cache found. Loading dates and saving to {}\n".format(cache_file_path))
+        cache_file_path = None
+    if sources == 'all':
+        sources = find_trees()
+    elif sources == 'standard':
+        sources = find_trees()
+        try:
+            exclusion_file = (impresources.files(resources) / 'trees_to_exclude.txt')
+            problematic_chrono = [lin.strip() for lin in open(exclusion_file).readlines()]
+            for source in problematic_chrono:
+                sys.stdout.write("Source {} in 'resources/trees_to_exclude.txt'. Excluding.\n".format(source))
+                sources.remove(source)
+        except AttributeError:
+            sys.stderr.write("Python version greater than 3.9 needed to read resources/trees_to_exclude.txt. Using all trees")
+    assert isinstance(sources, list)
     dates = combine_ages_from_sources(sources,
                                       ultrametricity_precision=ultrametricity_precision,
                                       json_out=cache_file_path,
-                                      fresh=fresh)
+                                      fresh=fresh,
+                                      compare_to = compare_to)
     return dates
 
-
-def synth_node_source_ages(node, cache_file_path=None):
+def synth_node_source_ages(node):
     """
     Return age estimates for a node.
     Arguemnts:
     node: Opentree node id
-    cache_file_path: path to a stored json with dates. default None.
     """
-    if cache_file_path is None:
-        cache_file_path = config.get('Paths', 'cache_file_path',
-                                     fallback='/tmp/node_ages.json')
-    log.debug("cache file path %s" % cache_file_path)
-    ##check if node is in synth?
-
     synth_resp = OT.synth_node_info(node)
     retdict = {}
     retdict['query'] = node
@@ -376,7 +474,7 @@ def synth_node_source_ages(node, cache_file_path=None):
                 msg = "Taxon {} is not monophyletic.\
                     resolving to MRCA: synth_node {}, and reporting dates for that\n".format(node, synth_resp)
                 retdict['msg'] = msg
-        dates = build_synth_node_source_ages(cache_file_path)
+        dates = build_synth_node_source_ages()
         retdict['ot:source_node_ages'] = dates['node_ages'].get(node)
     elif node.startswith('ott') and node.strip('ott').isnumeric():
         tax_resp = OT.taxon_info(node)
@@ -393,7 +491,21 @@ def synth_node_source_ages(node, cache_file_path=None):
     return retdict
 
 
-def write_fastdate_prior(subtree, dates, var_mult=0.1, outputfile='node_prior.txt'):
+def date_dist_summary(ages, method, var_mult):
+    """Generates a prior for a node based on existing dates"""
+    assert method in ['mean', 'max', 'min', 'rand']
+    if method == 'mean':
+        age_est = sum(ages)/len(ages)
+        if len(ages) > 1:
+            var = statistics.variance(ages)
+        else:
+            var = var_mult*age_est
+        if var < 0.001:
+             var = 0.001 #ToDO haaaaaack
+    return(age_est, var)
+
+
+def write_fastdate_prior(subtree, dates, select='mean', var_mult=0.1, outputfile='node_prior.txt'):
     """
     Writes out a node prior file for fatsdate input, with normal prior on each  node with any dates.
     Where multiple dates exist, variance for normal is estimated from dates.
@@ -414,25 +526,23 @@ def write_fastdate_prior(subtree, dates, var_mult=0.1, outputfile='node_prior.tx
                 mrca_dict[lab] = {}
                 mrca_dict[lab]['ages'] = dates['node_ages'][lab]
                 nd = subtree.find_node_with_label(lab)
-                mrca_dict[lab]['tips'] = [ti.taxon.label.replace(' ', '_') for ti in nd.leaf_iter()]
+                mrca_dict[lab]['tips'] = [str(ti.taxon.label).replace(' ', '_') for ti in nd.leaf_iter()]
     if len(mrca_dict) == 0:
         sys.stderr.write("no calibrations\n")
         return None
     fi = open(outputfile, 'w')
+    sources = set()
     for dated_node in mrca_dict:
         fi.write("'")
         fi.write("','".join(mrca_dict[dated_node]['tips']))
         fi.write("'")
         fi.write(' ')
         ages = [source['age'] for source in mrca_dict[dated_node]['ages']]
-        avgage = sum(ages)/len(ages)
-        if len(ages) > 1:
-            var = statistics.variance(ages)
-        else:
-            var = var_mult*avgage
-        fi.write('norm({},{},{})\n'.format(0, var, avgage))
+        sources.update([source['source_id'] for source in mrca_dict[dated_node]['ages']])
+        mean, var = date_dist_summary(ages, select, var_mult)
+        fi.write('norm({},{},{})\n'.format(0, var, mean))
     fi.close()
-    return outputfile
+    return {'sources':sources, 'outputfile':outputfile}
 
 def write_fastdate_tree(subtreepath,
                         br_len=0.01,
@@ -460,8 +570,7 @@ def write_fastdate_tree(subtreepath,
     subtree.write(path=outputfile, schema="newick")
 
 
-def prune_to_phylo_only(tree,
-                        grafted_solution="/home/ejmctavish/projects/otapi/opentree13.4_tree/grafted_solution/grafted_solution.tre"):
+def prune_to_phylo_only(tree, cache_file_dir=None):
     """
     Prune tree to only taxa with some phylogenetic information in OpenTree
     Inputs:
@@ -469,6 +578,12 @@ def prune_to_phylo_only(tree,
     grafted solution: path to current synth grafted solution TODO current default hardcoded hack
     https://files.opentreeoflife.org/synthesis/opentree13.4/output/grafted_solution/grafted_solution.tre
     """
+    if cache_file_dir is None:
+        cache_file_dir = config.get('paths', 'cache_file_dir',
+                                    fallback='/tmp/')
+    grafted_solution = cache_file_dir + '/grafted_solution.tre'
+    if not os.path.exists(grafted_solution):
+        os.system("wget https://files.opentreeoflife.org/synthesis/opentree13.4/output/grafted_solution/grafted_solution.tre -P {}".format(cache_file_dir))
     fi = open(grafted_solution).readlines()
     for lin in fi:
         lin = lin.replace('(', ',')
@@ -487,50 +602,305 @@ def prune_to_phylo_only(tree,
     tree.retain_taxa(taxa_to_retain)
     return tree
 
+def date_custom_synth(custom_synth_tree,
+                      output_dir,
+                      reps,
+                      max_age = None,
+                      method ='bladj',
+                      summarize = False,
+                      select="mean"):
+    dp_tree=dendropy.Tree.get(data = custom_synth_tree, schema="newick")
+    tips = [leaf.taxon.label for leaf in dp_tree.leaf_node_iter()]
+    dates = build_synth_node_source_ages(ultrametricity_precision=0.01)
+    root_node = OT.synth_mrca(node_ids=tips).response_dict['mrca']['node_id']
+    ott_ids = [tip.strip('ott') for tip in tips]
+    taxon_mrca = OT.taxon_mrca(ott_ids=ott_ids).response_dict['mrca']['ott_id']
+    if max_age:
+        max_age_est = max_age
+    elif root_node in dates['node_ages']:
+        max_age_est = max([source['age'] for source in dates['node_ages'][root_node]]) * 1.25
+        sys.stdout.write("Age estimate for root from data: {}\n".format(max_age_est))
+    else:
+        sys.stderr.write("ERROR: no age estimate for root - please provide max root age using --max_age\n")
+        raise Exception("ERROR: no age estimate for subtree root could be found in datastore. Please  re-run query with a max root age using argument 'max_age'\n") 
+    sys.stdout.write("Root node is {}, age estimate is  {}\n".format(root_node, max_age_est))
 
+    custom_str = conflict_tree_str(dp_tree)
+    chronograms = find_trees()
+    taxon_sources = find_trees(search_property = "ot:ottId", value=taxon_mrca)
+    input_sources = set(chronograms).intersection(set(taxon_sources))
+    if not os.path.isdir(output_dir):
+        os.mkdir(output_dir)
+    custom_dates = combine_ages_from_sources(input_sources,
+                                             json_out = "{}/node_ages.json".format(output_dir),
+                                             compare_to = custom_str)
+    print("checking mrca")
 
-def date_synth_subtree(node_id,
-                       reps,
+    outtreesfile, sources = date_tree(dp_tree,
+                                      custom_dates,
+                                      root_node,
+                                      max_age_est,
+                                      method='bladj',
+                                      output_dir=output_dir,
+                                      phylo_only=False,
+                                      reps=reps,
+                                      select=select)
+    return_dict = {'dated_trees_newick_list':[tree.rstrip() for tree in open(outtreesfile).readlines()],
+                   'topology_sources': "User input",
+                   'date_sources':list(sources)}
+    if summarize:
+        summaryfilepath = "{}/{}".format(output_dir, summary)
+        sumtree = summarize_trees(outtreesfile, summaryfilepath)
+        return_dict['summary_tree':sumtree]
+    return return_dict
+
+def date_synth_subtree(node_id=None,
+                       node_ids=None,
                        max_age=None,
+                       method = 'bladj',
+                       output_dir='Chrono_out',
                        summary='sumtre.tre',
-                       phylo_only=False):
+                       phylo_only=False,
+                       reps = 1,
+                       grid=300,
+                       select = 'mean',
+                       summarize = False,
+                       resolve_polytomies = False):
     """
-    Takes a synth subtree subtenting from node_id and assigns dates using fastdate.
+    Takes a synth subtree subtending from node_id and assigns dates using fastdate.
     Inputs
     ------
-    node_id: Opentree synth node id
+    node_id: Opentree synth node id  for root OR
+    node_ids: list of ott_ids or node_ids to include
     reps: how many runs to do (polytomies are arbitrarily resolved on each run)
     max_age: maximum age for root node. Default None - will be estimated from data if avail, but is required input if no data
     phylo_only: Prune to only synth tips with phylogenetic information (default False)
     summary: Output. deafult sumtre.tre
     """
     dates = build_synth_node_source_ages(ultrametricity_precision=0.01)
+    assert method in ['fastdate','bladj']
+    assert select in ['mean', 'random', 'min', 'max']
+    assert node_id or node_ids
+    if node_ids:
+        assert isinstance(node_ids, list)
+        root_node = OT.synth_mrca(node_ids=node_ids).response_dict['mrca']['node_id']
+    else:
+        root_node = node_id
+
     if max_age:
         max_age_est = max_age
-    elif node_id in dates['node_ages']:
-        max_age_est = max([source['age'] for source in dates['node_ages'][node_id]]) * 1.25
+    elif root_node in dates['node_ages']:
+        max_age_est = max([source['age'] for source in dates['node_ages'][root_node]]) * 1.25
+        sys.stdout.write("Age estimate for root from data: {}\n".format(max_age_est))
     else:
-        sys.stderr.write("ERROR: no age estimate for root - please provide max root age using --max_age")
-        return None
+        sys.stderr.write("ERROR: no age estimate for root - please provide max root age using --max_age\n")
+        raise Exception("ERROR: no age estimate for subtree root could be found in datastore. Please  re-run query with a max root age using argument 'max_age'\n") 
+    sys.stdout.write("Root node is {}, age estimate is  {}\n".format(root_node, max_age_est))
 
-    output = OT.synth_subtree(node_id=node_id, label_format='id')
-    subtree = dendropy.Tree.get_from_string(output.response_dict['newick'], schema='newick')
+    if node_id:
+        synth_output = OT.synth_subtree(node_id=root_node, label_format='id', include_all_node_labels=True)
+    if node_ids:
+        synth_output = OT.synth_induced_tree(node_ids=node_ids, label_format='id', include_all_node_labels=True)
+    subtree = dendropy.Tree.get_from_string(synth_output.response_dict['newick'], schema='newick')
+    outtreesfile, sources = date_tree(subtree=subtree,
+                                      dates=dates,
+                                      root_node=root_node,
+                                      max_age_est=max_age_est,
+                                      method=method,
+                                      output_dir=output_dir,
+                                      phylo_only=phylo_only,
+                                      reps=reps,
+                                      grid=grid,
+                                      select=select,
+                                      resolve_polytomies=resolve_polytomies)
+    return_dict = {'dated_trees_newick_list':[tree.rstrip() for tree in open(outtreesfile).readlines()],
+                   'topology_sources': synth_output.response_dict['supporting_studies'],
+                   'date_sources':list(sources)}
+    if summarize:
+        summaryfilepath = "{}/{}".format(output_dir, summary)
+        sumtree = summarize_trees(outtreesfile, summaryfilepath)
+        return_dict['summary_tree':sumtree]
+    return return_dict
+
+def date_tree(subtree,
+              dates,
+              root_node,
+              max_age_est,
+              method,
+              output_dir,
+              phylo_only = False,
+              reps = 1,
+              resolve_polytomies = False,
+              grid = None,
+              select = 'mean'):
     sys.stdout.write("{} leaves in tree\n".format(len(subtree)))
     if phylo_only:
         subtree = prune_to_phylo_only(subtree)
         sys.stdout.write("{} phylo informed leaves in tree\n".format(len(subtree)))
-    subtree.write(path="unresolved.tre", schema="newick")
+    if method == 'fastdate':
+        outtreesfile, sources = run_fastdate(subtree, dates, max_age_est, output_dir, reps, grid, select)
+    if method == 'bladj':
+       outtreesfile, sources = run_bladj(subtree,
+                                         dates,
+                                         root_node,
+                                         max_age_est,
+                                         output_dir,
+                                         reps=reps,
+                                         select=select,
+                                         resolve_polytomies=resolve_polytomies)
+    return outtreesfile, sources
 
-    pr = write_fastdate_prior(subtree, dates, var_mult=0.1, outputfile='node_prior.txt')
-    if pr:
+
+def summarize_trees(treesfile, summaryfilepath = "sumtre.tre"):
+    treelist = dendropy.TreeList.get(path=treesfile, schema='newick')
+    summary_tree = treelist.consensus()
+    summary_tree.write(summaryfilepath, schema = 'newick')
+    return(summaryfilepath)
+     
+
+def run_fastdate(subtree,
+                 dates,
+                 max_age_est,
+                 output_dir,
+                 reps,
+                 grid,
+                 select):
+    if not os.path.exists(output_dir):
+        os.mkdir(output_dir)
+    undated_treefile = "{}/unresolved.tre".format(output_dir)
+    subtree.write(path= undated_treefile, schema="newick")
+    priorfile = '{}/node_prior.txt'.format(output_dir)
+    pr = write_fastdate_prior(subtree, dates, select, var_mult=0.1, outputfile=priorfile)
+    if not pr:
+        sys.stderr.write("")
+    for i in range(int(reps)):
+        treefile = '{}/fastdate_input{}.tre'.format(output_dir, i)
+        outfile = '{}/fastdate_out{}.tre'.format(output_dir, i)            
+        write_fastdate_tree(undated_treefile, br_len=0.01, polytomy_br=0.001, outputfile=treefile)
+        fd_cmd = "fastdate --method_nodeprior --tree_file {tf} --prior_file {pf} --out_file {of} --out_form ultrametric --max_age {ma} --bd_rho 1 --grid {gs} > fastdate.out".format(tf=treefile,
+                                                                                                                                                               pf=priorfile,
+                                                                                                                                                               of=outfile,
+                                                                                                                                                               ma=max_age_est,
+                                                                                                                                                               gs=grid)
+        print(fd_cmd)
+        os.system(fd_cmd)
+    treesfile = "{}/fastdate_trees.tre".format(output_dir)
+    os.system("cat {}/fastdate_out*.tre > {}".format(output_dir, treesfile))
+    return treesfile, pr['sources']
+
+def run_bladj(subtree,
+              dates,
+              root_node,
+              max_age_est,
+              output_dir,
+              select,
+              reps,
+              resolve_polytomies):
+        if not os.path.exists(output_dir):
+            os.mkdir(output_dir)
+        undated_treefile = "{}/unresolved.tre".format(output_dir)
+        subtree.write(path= undated_treefile, schema="newick")
         for i in range(int(reps)):
-            write_fastdate_tree("unresolved.tre", br_len=0.01, polytomy_br=0.001, outputfile='fastdate_input{}.tre'.format(i))
-            os.system("fastdate --method_nodeprior --tree_file fastdate_input{}.tre --prior_file node_prior.txt --out_file node_prior{}.tre --max_age {} --bd_rho 1 --grid {} > fastdate.out".format(i,
-                                                                                                                                                                                                     i,
-                                                                                                                                                                                                     max_age_est,
-                                                                                                                                                                                                     max_age_est*2))
+            if resolve_polytomies:
+                subtree =  dendropy.Tree.get_from_path(undated_treefile, schema="newick")
+                undated_rand_resolve_treefile = "{}/resolved{}.tre".format(output_dir, i)
+                subtree.resolve_polytomies(rng = random)
+                subtree.write(path= undated_rand_resolve_treefile, schema="newick")
+                pr = write_bladj_ages(subtree, dates, root_node, select, root_age=max_age_est, output_dir=output_dir)
+                curr_dir = os.getcwd()
+                os.chdir(output_dir)
+                os.system("phylocom bladj -f  resolved{}.tre >> bladj.tre".format(i))
+                os.chdir(curr_dir)
+            else:
+                pr = write_bladj_ages(subtree, dates, root_node, select, root_age=max_age_est, output_dir=output_dir)
+                curr_dir = os.getcwd()
+                os.chdir(output_dir)
+                os.system("phylocom bladj -f  unresolved.tre >> bladj.tre")
+                os.rename("ages", "ages{}".format(i))
+                os.chdir(curr_dir)
+        treesfile = "{}/bladj.tre".format(output_dir)
+        return treesfile, pr['sources']
 
-        os.system("sumtrees.py --set-edges=mean-age --summarize-node-ages node_prior*.tre > {}".format(summary))
-        return summary
-    return None
+def write_bladj_ages(subtree, dates, root_node, select, root_age, output_dir='.'):
+    """
+    Writes out an ages and a citation file 
+    """
+    assert select in ['mean', 'random', 'min', 'max']
+    outputfile = "{}/ages".format(output_dir)
+    cites = open("{}/date_cites.txt".format(output_dir), 'w')
+    ages = open(outputfile,'w')
+    dated_nodes = set()
+    undated_nodes = set()
+    sources = set()
+    count = 0
+    for node in subtree:
+        lab = None
+        if node.label:
+            lab = node.label
+        elif node.taxon:
+            lab = node.taxon.label
+        assert(isinstance(dates, dict))
+        assert(isinstance(dates['node_ages'], dict))
+        if lab in dates['node_ages']:
+            dated_nodes.add(lab)
+            sources.update([source['source_id'] for source in dates['node_ages'][lab]])
+            age_range = [float(source['age']) for source in dates['node_ages'][lab]]
+            age_range.sort()
+            if select == 'mean':
+                age_est = sum(age_range) / len(age_range) 
+            if select == 'min':
+                age_est = age_range[0]
+            if select == 'max':
+                age_est = age_range[-1]
+            if select == 'random':
+                if len(age_range) == 1:
+                    keep = random.choice([True, False]) #So that that date isn't in every single iteration
+                    if keep:
+                        age_est = age_range[0]
+                    else:
+                        dated_nodes.remove(lab)
+                        continue
+                else:
+                    age_est = random.choice(age_range)
+            ages.write("{}\t{}\n".format(node.label, age_est))
+            count += 1
+        else:
+            undated_nodes.add(lab)
+    #if count <= 2:
+    #    sys.stderr.write("ERROR: only 2 or fewer age calibrations found for this tree. We have insufficient data to estimate dates.\n")
+    #    raise Exception("ERROR: only 2 or fewer age calibrations found for this tree. We have insufficient data to estimate dates.\n") 
+    cites.write("\n".join(list(sources)))
+    cites.close()
+    ages.write("{}\t{}\n".format(root_node, root_age))
+    ages.close()
+    return {'sources':sources, 'outputfile':outputfile}
 
+
+
+
+def get_dated_parent_age(ott_ids=None, node_ids=None, root_node=None):
+    '''Tree miust have ott_id + otu labels'''
+    dates = build_synth_node_source_ages(ultrametricity_precision=0.01)
+    if ott_ids:
+        root_node = OT.synth_mrca(ott_ids=ott_ids).response_dict['mrca']['node_id']
+    elif node_ids:
+        root_node = OT.synth_mrca(node_ids=node_ids).response_dict['mrca']['node_id']
+    if root_node is None:
+        print("ott_ids, node_ids, or a root_node are required")
+        return None     
+    if root_node in dates['node_ages']:
+        max_age_est = max([source['age'] for source in dates['node_ages'][root_node]])
+        return max_age_est
+    else:
+        ott_id = OT.taxon_mrca(ott_ids=ott_ids).response_dict['mrca']['ott_id']
+        if 'ott' + str(ott_id) in dates['node_ages']:
+            max_age_est = max([source['age'] for source in dates['node_ages'][root_node]])
+            return max_age_est
+        else:      
+            lineage = OT.taxon_info(ott_id, include_lineage=True).response_dict['lineage']
+            for parent in lineage:
+                ott_id = parent['ott_id']
+                if 'ott' + str(ott_id) in dates['node_ages']:
+                    max_age_est = max([source['age'] for source in dates['node_ages']['ott' + str(ott_id)]])
+                    print("max_age estimate from {}".format('ott' + str(ott_id)))
+                    return max_age_est
