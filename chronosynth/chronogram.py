@@ -175,18 +175,20 @@ def map_conflict_ages(source,
         metadata = {'source_id':'direct_input',
 #                    'compare_to': compare_to, 
                     'time_unit':time_unit}
-    ages_data = node_ages(dp_tree,
+    dated_treestr = conflict_tree_str(dp_tree)
+    dated_tree = dendropy.Tree.get(data=dated_treestr, schema="Newick")
+    ##re-ingesting to make sure node labels match exacty!
+    dated_tree.annotations["branchLengthMode"]='ot:time'
+    dated_tree.is_rooted=True
+    ages_data = node_ages(dated_tree,
                           ultrametricity_precision=ultrametricity_precision)
     if ages_data is None:
         return None
-    version = OT.about()
-    metadata['synth_tree_about'] = version['synth_tree_about']
-    treestr = conflict_tree_str(dp_tree)
     if isinstance(compare_to, dendropy.datamodel.treemodel.Tree):
         compare_to_str =  conflict_tree_str(compare_to)
-        output_conflict = OT.conflict_str(treestr, compare_to_str)
     else:
-        output_conflict = OT.conflict_str(treestr, compare_to)
+        compare_to_str =  compare_to
+    output_conflict = OT.conflict_str(dated_treestr, compare_to_str)
     conf = output_conflict.response_dict
     if conf is None:
         sys.stderr.write("No conflict data available for tree {} \n Check its status at {}\n".format(metadata['source_id'],                                                                                           url))
@@ -195,7 +197,9 @@ def map_conflict_ages(source,
         sys.stderr.write("Conflict error - check inputs. {}".format(conf['message']))
         return None
     if compare_to == 'synth':
-        root = dp_tree.seed_node.label
+        version = OT.about()
+        metadata['synth_tree_about'] = version['synth_tree_about']
+        root = dated_tree.seed_node.label
         leaves = [tax for tax in conf.keys() if tax.startswith('ott')]
         root_node_map = OT.synth_mrca(node_ids = leaves).response_dict
         conf[root] = {'status': 'supported_by', 'witness': root_node_map['mrca']['node_id']}
@@ -204,15 +208,16 @@ def map_conflict_ages(source,
             comp_tree = dendropy.Tree.get(data=compare_to, schema="Newick")
         elif isinstance(compare_to, dendropy.datamodel.treemodel.Tree):
             comp_tree = compare_to
-        dated_tree_tips = [tip.taxon.label for tip in dp_tree.leaf_node_iter()]
-        comparison_tips = [tip.taxon.label for tip in comp_tree.leaf_node_iter() if tip.taxon.label.strip('ott') in dated_tree_tips]
+        dated_tree_tips = [tip.taxon.label for tip in dated_tree.leaf_node_iter()]
+        comparison_tips = [tip.taxon.label for tip in comp_tree.leaf_node_iter() if tip.taxon.label in dated_tree_tips]
+        assert len(comparison_tips)>2
+        comp_tree.is_rooted=True
         root_node_map = comp_tree.mrca(taxon_labels = comparison_tips)
-        comparison_tips_dated = [tip.strip("ott") for tip in comparison_tips]
         taxa = []
-        for label in comparison_tips_dated:
-            node = dp_tree.find_node_with_taxon_label(label)
+        for label in comparison_tips:
+            node = dated_tree.find_node_with_taxon_label(label)
             taxa.append(node.taxon)
-        matched_root = dp_tree.mrca(taxa = taxa)
+        matched_root = dated_tree.mrca(taxa = taxa)
         conf[matched_root.label] = {'status': 'supported_by', 'witness': root_node_map.label}
     supported_nodes = {}
     for node_label in ages_data['ages']:
